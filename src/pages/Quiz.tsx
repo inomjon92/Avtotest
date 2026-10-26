@@ -6,6 +6,7 @@ import { ruleById } from '../data/rules';
 import { topicById } from '../data/topics';
 import { RoadSign } from '../components/RoadSign';
 import { Scene } from '../components/Scene';
+import { Art } from '../components/Art';
 import { Modal, PageHeader, Empty } from '../components/ui';
 import { buildTickets, examOutcome, pickExamQuestions } from '../lib/exam';
 import { hashString, seeded, shuffle } from '../lib/random';
@@ -344,6 +345,7 @@ export function QuestionMedia({ q, size }: { q: Question; size: number }) {
   const sign = signById(q.sign);
   if (q.scene) return <Scene scene={q.scene} size={size * 1.6} />;
   if (q.image) return <img src={q.image} alt="" className="q-img" style={{ maxHeight: size * 1.8 }} />;
+  if (q.art) return <Art name={q.art} size={size * 1.8} />;
   if (sign) return <RoadSign sign={sign} size={size} />;
   return <div className="q-placeholder" style={{ fontSize: size / 3 }}>{topicById(q.topic)?.icon ?? '🚗'}</div>;
 }

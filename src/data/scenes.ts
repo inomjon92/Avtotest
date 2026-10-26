@@ -1,10 +1,9 @@
-import type { SceneSpec } from './types';
+import type { RoadSpec, RoadVehicle, SceneSpec } from './types';
 
 // Savollarga biriktirilgan vaziyat chizmalari (savol id -> chizma).
 const you = (turn: 'straight' | 'left' | 'right' | 'uturn' | 'stop' = 'straight') => ({ from: 's' as const, you: true, turn });
 
-export const SCENES: Record<string, SceneSpec> = {
-  q12: { kind: 'straight', zebra: ['s'], peds: ['s'], signs: [{ at: 's', id: '5.16' }], cars: [{ ...you(), pos: 235 }] },
+export const SCENES: Record<string, SceneSpec | RoadSpec> = {
   q22: { kind: 'cross', light: { at: 's', color: 'flash' }, cars: [you()] },
   q27: { kind: 'cross', light: { at: 's', color: 'red', arrow: 'right' }, cars: [you('right'), { from: 'w', turn: 'straight', label: 'A' }] },
   q28: { kind: 'cross', cars: [you(), { from: 'e', turn: 'straight', label: 'A' }] },
@@ -13,6 +12,9 @@ export const SCENES: Record<string, SceneSpec> = {
   q31: { kind: 'cross', light: { at: 's', color: 'green' }, zebra: ['e'], peds: ['e'], cars: [you('right')] },
   q32: { kind: 'cross', light: { at: 's', color: 'green' }, cars: [you(), { from: 's', turn: 'stop', pos: -75, label: 'A' }, { from: 's', turn: 'stop', pos: -120, label: 'B' }] },
   q80: { kind: 'cross', light: { at: 's', color: 'green' }, signs: [{ at: 's', id: '2.4' }], cars: [you(), { from: 'e', turn: 'straight', label: 'A' }] },
+  q25: { kind: 'cross', regulator: { pose: 'up', facing: 's' }, cars: [you(), { from: 'w', turn: 'straight', label: 'A' }] },
+  q26: { kind: 'cross', light: { at: 's', color: 'green' }, regulator: { pose: 'side', facing: 's' }, cars: [you()] },
+  q101: { kind: 'cross', signs: [{ at: 's', id: '2.1' }, { at: 's', id: '8.13' }, { at: 'w', id: '2.1' }, { at: 'w', id: '8.13' }, { at: 'n', id: '2.4' }, { at: 'e', id: '2.4' }], cars: [you('left'), { from: 'w', turn: 'straight', label: 'A' }] },
   q92: { kind: 'cross', light: { at: 's', color: 'redyellow' }, cars: [you()] },
   q94: { kind: 'cross', regulator: { pose: 'side', facing: 'w' }, cars: [you()] },
   q95: { kind: 'cross', regulator: { pose: 'side', facing: 's' }, cars: [you()] },
@@ -22,12 +24,6 @@ export const SCENES: Record<string, SceneSpec> = {
   q100: { kind: 'cross', signs: [{ at: 's', id: '2.4' }, { at: 'e', id: '2.1' }, { at: 'w', id: '2.1' }], cars: [you('left'), { from: 'e', turn: 'straight', label: 'A' }, { from: 'w', turn: 'straight', label: 'B' }] },
   q102: { kind: 'cross', dirt: ['e'], cars: [you(), { from: 'e', turn: 'straight', label: 'A' }] },
   q103: { kind: 'cross', cars: [you(), { from: 'n', turn: 'left', label: 'A' }] },
-  q116: { kind: 'straight', cars: [{ from: 's', turn: 'left', label: 'A', pos: 130 }, { ...you('stop'), pos: 235 }] },
-  q128: { kind: 'straight', lanes: 2, marking: 'double', zebra: ['s'], peds: ['s'], cars: [{ from: 's', lane: 0, turn: 'stop', label: 'A', pos: 190 }, { from: 's', lane: 1, you: true, turn: 'straight', pos: 245 }] },
-  q51: { kind: 'rail', barrier: 'closed', cars: [{ ...you(), pos: 240 }] },
-  q132: { kind: 'rail', signs: [{ at: 's', id: '1.2' }], cars: [{ ...you('stop'), pos: 240 }] },
-  q133: { kind: 'rail', barrier: 'closed', cars: [{ ...you(), pos: 240 }] },
-  q134: { kind: 'rail', cars: [{ ...you(), pos: 240 }, { from: 's', turn: 'stop', label: 'A', pos: 80 }, { from: 's', turn: 'stop', label: 'B', pos: 35 }] },
   q151: { kind: 'cross', cars: [{ from: 's', turn: 'straight', label: 'A' }, { from: 'w', turn: 'straight', label: 'B' }] },
   q152: { kind: 'cross', cars: [{ from: 's', turn: 'left', label: 'A' }, { from: 'n', turn: 'straight', label: 'B' }] },
   q153: { kind: 'tee', cars: [you('left'), { from: 'e', turn: 'straight', label: 'A' }] },
@@ -35,4 +31,111 @@ export const SCENES: Record<string, SceneSpec> = {
   q155: { kind: 'cross', rails: 'ns', cars: [you(), { from: 'n', turn: 'left', kind: 'tram', label: 'T' }] },
   q156: { kind: 'cross', light: { at: 's', color: 'green' }, cars: [you('right'), { from: 'n', turn: 'left', label: 'A' }] },
   q157: { kind: 'cross', dirt: ['s'], cars: [you(), { from: 'w', turn: 'straight', label: 'A' }] },
+};
+
+// ---- To'g'ri yo'l bo'lagi sahnalari ----
+const Y = (y: number, extra: Partial<RoadVehicle> = {}): RoadVehicle => ({ y, you: true, ...extra });
+const A = (y: number, extra: Partial<RoadVehicle> = {}): RoadVehicle => ({ y, label: 'A', ...extra });
+const road = (s: Omit<RoadSpec, 'kind'>): RoadSpec => ({ kind: 'road', ...s });
+const q = (x: number, y: number) => ({ x, y, text: '?' });
+
+Object.assign(SCENES, {
+  // chiziqlar
+  q18: road({ center: 'solid', vehicles: [A(130, { kind: 'truck' }), Y(235, { path: 'change-left', blink: 'left' })], notes: [q(105, 175)] }),
+  q19: road({ center: 'dashed', vehicles: [A(130, { kind: 'truck' }), Y(235, { path: 'change-left', blink: 'left' })], notes: [q(105, 175)] }),
+  q20: road({ center: 'solid-dashed', vehicles: [A(205, { kind: 'truck' }), Y(115, { x: 133, path: 'change-right', blink: 'right' })], notes: [q(105, 60)] }),
+  q21: road({ cross: 60, stopLine: 112, light: { x: 196, y: 108, color: 'red' }, vehicles: [Y(205, { path: 'straight' }), A(77, { x: 40, rot: 90, path: 'straight' })] }),
+  q88: road({ center: 'approach', centerTo: { y: 120, marking: 'solid' }, vehicles: [A(150), Y(250, { path: 'straight' })] }),
+  q89: road({ center: 'solid', yellow: { dx: 10, dashed: true }, signs: [{ x: 220, y: 110, id: '1.25' }], vehicles: [A(110), Y(235, { path: 'straight' })] }),
+  q90: road({ center: 'double', cross: 70, vehicles: [Y(225, { path: 'turn-left', blink: 'left' })], notes: [q(105, 150)] }),
+  q91: road({ lanes: 2, cross: 50, stopLine: 112, arrows: [{ lane: 0, y: 160, dirs: ['s', 'r'] }, { lane: 1, y: 160, dirs: ['l'] }], vehicles: [Y(240, { lane: 0 })] }),
+  q125: road({ center: 'solid', vehicles: [Y(150, { x: 165 })], dims: [{ x1: 150, y1: 190, x2: 165, y2: 190, label: '' }], notes: [{ x: 105, y: 190, text: '< 3 m' }] }),
+  // manevr
+  q33: road({ lanes: 2, vehicles: [Y(160, { lane: 0, blink: 'left', path: 'change-left' }), A(262, { lane: 1, path: 'straight' })] }),
+  q34: road({ lanes: 2, vehicles: [Y(200, { lane: 0, blink: 'left', path: 'change-left' }), A(240, { lane: 1, path: 'straight', dist: 30 })] }),
+  q35: road({ side: [{ y: 110, kind: 'driveway' }], vehicles: [Y(110, { x: 250, rot: -90, path: 'straight', dist: -20 }), A(240, { path: 'straight' })], peds: [{ x: 192, y: 150, angle: 0 }] }),
+  q36: road({ zebra: 110, vehicles: [Y(165, { path: 'uturn', blink: 'left' })], signs: [{ x: 218, y: 90, id: '5.16' }], notes: [q(105, 150)] }),
+  q37: road({ cross: 110, vehicles: [Y(35, { path: 'back' })], notes: [q(105, 70)] }),
+  q68: road({ side: [{ y: 120, kind: 'driveway' }], vehicles: [Y(120, { x: 252, rot: -90, path: 'straight', dist: -10 })], notes: [q(105, 120)] }),
+  q104: road({ lanes: 2, cross: 70, vehicles: [Y(220, { lane: 1, blink: 'right', path: 'turn-right' })], notes: [q(60, 150)] }),
+  q105: road({ lanes: 3, oneway: true, vehicles: [Y(200, { lane: 2, blink: 'right', path: 'change-right' }), A(200, { lane: 0, blink: 'left', path: 'change-left' })] }),
+  q108: road({ lanes: 2, vehicles: [Y(220, { lane: 0, blink: 'left', path: 'change-left' }), A(120, { lane: 0 })], notes: [q(105, 220)] }),
+  q109: road({ lanes: 3, oneway: true, signs: [{ x: 235, y: 70, id: '5.1' }], vehicles: [Y(110, { lane: 0, path: 'back' }), A(250, { lane: 1, path: 'straight' })], notes: [q(60, 180)] }),
+  q110: road({ env: 'fog', vehicles: [Y(225, { path: 'uturn', blink: 'left' })], notes: [q(250, 200)] }),
+  // tezlik
+  q38: road({ lanes: 2, signs: [{ x: 252, y: 120, id: '5.23', size: 62 }], vehicles: [Y(230, { lane: 0, path: 'straight' })], notes: [{ x: 120, y: 40, text: '? km/soat' }] }),
+  q39: road({ lanes: 2, signs: [{ x: 252, y: 120, id: '5.24', size: 62 }], vehicles: [Y(230, { lane: 0, path: 'straight' })], notes: [{ x: 120, y: 40, text: '? km/soat' }] }),
+  q40: road({ yard: true, center: 'none', side: [{ y: 90, x: 210, kind: 'playground' }], signs: [{ x: 214, y: 220, id: '5.21', size: 40 }], peds: [{ x: 70, y: 120, kind: 'child' }, { x: 84, y: 132, kind: 'child' }], vehicles: [Y(230, { x: 150, path: 'straight' })], notes: [{ x: 150, y: 40, text: '? km/soat' }] }),
+  q41: road({ vehicles: [A(110), Y(185, { hazard: true })], tow: [0, 1], notes: [{ x: 90, y: 40, text: '? km/soat' }] }),
+  q42: road({ vehicles: [A(130), Y(235, { path: 'straight' })], dims: [{ x1: 205, y1: 152, x2: 205, y2: 212, label: '?' }] }),
+  q111: road({ vehicles: [Y(110, { path: 'straight', dist: -40 }), A(170), { y: 230, label: 'B' }], notes: [{ x: 230, y: 110, text: '10 km/soat' }] }),
+  q112: road({ vehicles: [Y(130, { brake: true }), A(190)], notes: [q(230, 130)] }),
+  q113: road({ env: 'fog', vehicles: [A(80), Y(235, { path: 'straight' })], dims: [{ x1: 220, y1: 100, x2: 220, y2: 212, label: '50 m' }] }),
+  q115: road({ env: 'ice', vehicles: [A(110), Y(220, { path: 'straight' })], dims: [{ x1: 205, y1: 132, x2: 205, y2: 198, label: '?' }] }),
+  // quvib o'tish
+  q43: road({ zebra: 115, signs: [{ x: 218, y: 92, id: '5.16' }], vehicles: [A(185), Y(260, { path: 'overtake', blink: 'left' })] }),
+  q44: road({ vehicles: [Y(175, { path: 'straight' }), A(205, { x: 133, path: 'straight', dist: 40, blink: 'right' })], notes: [q(232, 175)] }),
+  q45: road({ vehicles: [A(170, { kind: 'truck' }), Y(255, { path: 'overtake', blink: 'left' }), { y: 35, dir: 'down', label: 'B' }] }),
+  q74: road({ vehicles: [A(165), Y(250, { path: 'overtake', blink: 'left' })] }),
+  q117: road({ vehicles: [{ y: 110, label: 'B', kind: 'truck' }, A(185, { path: 'overtake', blink: 'left' }), Y(260)] }),
+  q119: road({ lanes: 2, center: 'none', vehicles: [A(150, { lane: 1, kind: 'truck' }), Y(245, { lane: 1, path: 'overtake', blink: 'left' })] }),
+  q120: road({ vehicles: [A(200, { path: 'straight' }), Y(120, { x: 133, path: 'change-right', blink: 'right' })] }),
+  q121: road({ rails: 45, signs: [{ x: 218, y: 140, id: '1.2' }], vehicles: [A(200, { kind: 'truck' }), Y(270, { path: 'overtake', blink: 'left' })], dims: [{ x1: 85, y1: 58, x2: 85, y2: 160, label: '100 m' }] }),
+  q130: road({ zebra: 140, signs: [{ x: 218, y: 118, id: '5.16' }], vehicles: [A(190), Y(262, { path: 'overtake', blink: 'left' })] }),
+  // to'xtash
+  q46: road({ zebra: 90, vehicles: [Y(175, { path: 'park' })], dims: [{ x1: 210, y1: 104, x2: 210, y2: 150, label: '? m' }] }),
+  q47: road({ rails: 60, signs: [{ x: 218, y: 130, id: '1.2' }], vehicles: [Y(205, { x: 172 })], dims: [{ x1: 90, y1: 73, x2: 90, y2: 185, label: '? m' }] }),
+  q48: road({ vehicles: [Y(150, { x: 172, door: 'left' }), { y: 255, x: 150, kind: 'moto', label: 'A', path: 'straight' }] }),
+  q72: road({ vehicles: [A(80, { x: 172, door: 'right' }), { y: 210, x: 172, label: 'B' }], peds: [{ x: 194, y: 84 }], notes: [{ x: 240, y: 80, text: '2 daq.' }, { x: 240, y: 210, text: '1 soat' }] }),
+  q122: road({ vehicles: [Y(150, { x: 128, path: 'straight', dist: -45 })], notes: [q(80, 150)] }),
+  q123: road({ side: [{ y: 100, kind: 'busstop' }], signs: [{ x: 222, y: 70, id: '5.12' }], vehicles: [Y(190, { x: 172 })], dims: [{ x1: 210, y1: 134, x2: 210, y2: 170, label: '? m' }] }),
+  q124: road({ cross: 70, vehicles: [Y(180, { x: 172 })], dims: [{ x1: 214, y1: 104, x2: 214, y2: 160, label: '? m' }] }),
+  q127: road({ vehicles: [Y(150, { x: 172 })], peds: [{ x: 194, y: 200, angle: 180 }], notes: [q(240, 150)] }),
+  q71: road({ vehicles: [Y(130, { x: 172, hazard: true })], triangle: { y: 240 }, notes: [q(80, 130)] }),
+  // piyodalar
+  q49: road({ side: [{ y: 120, kind: 'busstop' }], vehicles: [{ y: 120, kind: 'schoolbus', hazard: true, x: 168 }, Y(255, { x: 133, path: 'straight' })], peds: [{ x: 194, y: 104, kind: 'child' }, { x: 196, y: 138, kind: 'child' }] }),
+  q50: road({ vehicles: [Y(230, { path: 'straight', dist: -20 })], peds: [{ x: 150, y: 120, kind: 'blind', angle: 90 }] }),
+  q129: road({ lanes: 2, tramLane: 1, vehicles: [{ y: 95, lane: 1, kind: 'tram', label: 'T' }, Y(245, { lane: 0, path: 'straight' })], peds: [{ x: 200, y: 80 }, { x: 200, y: 108 }, { x: 186, y: 96 }] }),
+  q131: road({ yard: true, center: 'none', side: [{ y: 70, x: 200, kind: 'playground' }], peds: [{ x: 150, y: 130, kind: 'child', angle: 90 }, { x: 128, y: 150 }], vehicles: [Y(240, { x: 150, path: 'straight', dist: -10 })], signs: [{ x: 60, y: 230, id: '5.21', size: 40 }] }),
+  // temir yo'l
+  q52: road({ rails: 140, train: 'left', signs: [{ x: 218, y: 230, id: '1.2' }], vehicles: [Y(140, { hazard: true })] }),
+  // chiroqlar va signallar
+  q53: road({ env: 'night', vehicles: [Y(235, { beams: 'low' }), A(90, { dir: 'down', beams: 'high' })] }),
+  q54: road({ env: 'night', vehicles: [Y(245, { beams: 'high' }), A(50, { dir: 'down', beams: 'low' })], dims: [{ x1: 85, y1: 72, x2: 85, y2: 222, label: '? m' }] }),
+  q55: road({ signs: [{ x: 228, y: 40, id: '5.23', size: 62 }], vehicles: [Y(110, { x: 172, hazard: true })], triangle: { y: 240 }, dims: [{ x1: 210, y1: 132, x2: 210, y2: 240, label: '? m' }] }),
+  q138: road({ signs: [{ x: 228, y: 40, id: '5.24', size: 62 }], vehicles: [Y(110, { x: 172, hazard: true })], triangle: { y: 240 }, dims: [{ x1: 210, y1: 132, x2: 210, y2: 240, label: '? m' }] }),
+  q56: road({ vehicles: [Y(140, { x: 172, hazard: true }), A(60, { dir: 'down', path: 'straight' })], notes: [q(80, 140)] }),
+  q135: road({ lanes: 2, signs: [{ x: 252, y: 60, id: '5.23', size: 62 }], vehicles: [A(130, { lane: 0 }), Y(220, { lane: 0, horn: true })], notes: [q(40, 220)] }),
+  q136: road({ env: 'night', vehicles: [Y(150, { x: 172, parkLights: true })], notes: [q(80, 150)] }),
+  q137: road({ env: 'night', vehicles: [A(140, { beams: 'low' }), Y(250, { beams: 'high' })], notes: [q(80, 250)] }),
+  q139: road({ vehicles: [A(110), Y(185)], tow: [0, 1], notes: [q(80, 185)] }),
+  q143: road({ vehicles: [A(95), Y(205)], tow: [0, 1], dims: [{ x1: 205, y1: 117, x2: 205, y2: 183, label: '? m' }] }),
+  q144: road({ env: 'ice', vehicles: [A(100), Y(180)], tow: [0, 1], notes: [q(80, 140)] }),
+  // umumiy
+  q65: road({ vehicles: [A(120, { x: 160, rot: 30, hazard: true }), Y(168, { x: 168, rot: -12, hazard: true })], triangle: { y: 262 }, peds: [{ x: 212, y: 150, angle: 90 }], notes: [{ x: 240, y: 120, text: 'YTH' }] }),
+  q77: road({ vehicles: [A(120, { x: 158, rot: 25 }), Y(168, { x: 166, rot: -10, hazard: true })], peds: [{ x: 210, y: 150 }, { x: 210, y: 175 }], notes: [{ x: 60, y: 140, text: 'YTH' }] }),
+  q69: road({ lanes: 2, vehicles: [Y(150, { lane: 1 }), A(165, { lane: 0 }), { y: 255, lane: 1, kind: 'ambulance', path: 'straight' }] }),
+  q73: road({ env: 'fog', vehicles: [A(60), Y(240, { path: 'straight' })], dims: [{ x1: 220, y1: 82, x2: 220, y2: 218, label: '? m' }] }),
+  q83: road({ signs: [{ x: 218, y: 50, id: '1.11' }], vehicles: [Y(255, { path: 'straight' })], dims: [{ x1: 85, y1: 30, x2: 85, y2: 230, label: '? m' }], notes: [{ x: 220, y: 10, text: '' }] }),
+  q84: road({ cross: 45, arrows: [{ lane: 0, y: 140, dirs: ['s'] }], signs: [{ x: 218, y: 108, id: '4.1.2' }], vehicles: [Y(240)], notes: [q(80, 140)] }),
+  q79: road({ signs: [{ x: 226, y: 104, id: '3.24', text: '60', size: 44 }, { x: 226, y: 150, id: '3.24', text: '40', temp: true, size: 44 }], vehicles: [Y(240, { path: 'straight' })], notes: [q(80, 128)] }),
+  q78: road({ cross: 130, signs: [{ x: 218, y: 240, id: '3.24' }], vehicles: [Y(55, { path: 'straight', dist: -10 })], notes: [q(80, 55)] }),
+  q126: road({ signs: [{ x: 218, y: 60, id: '2.1' }, { x: 222, y: 240, id: '5.24', size: 62 }], vehicles: [Y(150, { x: 172 })], notes: [q(80, 150)] }),
+  q12: road({ zebra: 120, signs: [{ x: 218, y: 92, id: '5.16' }], peds: [{ x: 150, y: 120, angle: 90 }], vehicles: [Y(235, { path: 'straight', dist: -10 })] }),
+  q116: road({ cross: 70, vehicles: [A(150, { blink: 'left', path: 'turn-left' }), Y(245)], notes: [q(230, 200)] }),
+  q128: road({ lanes: 2, center: 'double', zebra: 110, signs: [{ x: 252, y: 86, id: '5.16' }], vehicles: [A(165, { lane: 0 }), Y(245, { lane: 1, path: 'straight' })], peds: [{ x: 226, y: 110, angle: 180 }] }),
+  q51: road({ rails: 110, barrier: 'closed', signs: [{ x: 218, y: 220, id: '1.1' }], vehicles: [Y(240, { path: 'straight' })] }),
+  q132: road({ rails: 80, signs: [{ x: 218, y: 190, id: '1.2' }], vehicles: [Y(220)], dims: [{ x1: 90, y1: 87, x2: 90, y2: 200, label: '? m' }] }),
+  q133: road({ rails: 100, barrier: 'closed', signs: [{ x: 218, y: 210, id: '1.1' }], vehicles: [Y(230, { path: 'straight', dist: 20 })] }),
+  q134: road({ rails: 150, vehicles: [Y(255, { path: 'straight' }), A(95, { brake: true }), { y: 40, label: 'B', brake: true }] }),
+} satisfies Record<string, RoadSpec>);
+
+/** Piktogramma bilan ko'rsatiladigan savollar */
+export const ART_FOR: Record<string, string> = {
+  q23: 'light-green-flash', q24: 'light-yellow', q93: 'light-arrow-off', q98: 'reversible',
+  q106: 'hand-right', q107: 'hand-stop', q118: 'hill',
+  q61: 'aid-arterial', q62: 'aid-unconscious', q63: 'aid-burn', q64: 'aid-fracture', q145: 'aid-cpr', q146: 'aid-venous',
+  q147: 'aid-nose', q148: 'aid-spine', q149: 'aid-faint', q150: 'aid-shock',
+  q57: 'phone', q58: 'belts', q59: 'docs', q60: 'brake', q140: 'wiper', q141: 'kit', q142: 'childseat',
+  q66: 'passenger', q67: 'alcohol', q75: 'pills', q76: 'tired',
 };

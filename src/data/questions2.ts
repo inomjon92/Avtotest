@@ -145,7 +145,7 @@ export const RAW2: Raw2[] = [
   ['q113', 'tezlik', 'tezlik-1', '', "Tumanda ko'rinish 50 m. Tezlikni qanday tanlaysiz?",
     ["Ko'rinish masofasida to'xtay oladigan tezlikda", "Belgilangan maksimal tezlikda", "Oldingi avtomobil tezligida", "Avariya signalini yoqib odatdagi tezlikda"],
     "Tezlik ko'rinish masofasi doirasida to'xtash imkonini berishi kerak.", 2],
-  ['q114', 'tezlik', 'tezlik-1', '', "Ko'k doiradagi \"50\" raqami nimani bildiradi?",
+  ['q114', 'tezlik', 'tezlik-1', '4.6', "Ko'k doiradagi \"50\" raqami nimani bildiradi?",
     ["Minimal tezlik — 50 km/soatdan kam bo'lmagan tezlikda harakatlanish", "Maksimal tezlik 50 km/soat", 'Tavsiya etilgan tezlik', "Yo'l raqami"],
     "Ko'k doiradagi raqam — buyuruvchi \"Minimal tezlik cheklovi\" belgisi. Qizil hoshiyali doiradagi raqam esa maksimal tezlik.", 3],
   ['q115', 'tezlik', 'tezlik-2', '', "Ho'l yoki muzli yo'lda oraliq masofa qanday o'zgarishi kerak?",

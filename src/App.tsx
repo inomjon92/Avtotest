@@ -6,10 +6,11 @@ import Quiz from './pages/Quiz';
 import Stats from './pages/Stats';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
+import Gallery from './pages/Gallery';
 import { Documents, Fines, GuideHome, RuleDetail, RulesList, SignsCatalog, Tips } from './pages/Guide';
 import Login from './pages/Login';
 import { useGuest, useSession, useStore } from './store/store';
-import { loadContent, pullProgress, refreshMe, startSync } from './store/api';
+import { loadContent, refreshMe, startSync, syncNow } from './store/api';
 import { useT } from './store/i18n';
 
 function useAppearance() {
@@ -56,7 +57,7 @@ function useBoot() {
     started = true;
     startSync();
     loadContent();
-    refreshMe().then(() => pullProgress().catch(() => {}));
+    refreshMe().then(() => syncNow());
   }, []);
 }
 
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="/stats" element={<Stats />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/admin/rasmlar" element={<Gallery />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </main>

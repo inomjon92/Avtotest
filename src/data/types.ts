@@ -16,7 +16,9 @@ export interface Question {
   sign?: string;
   image?: string;
   /** Vaziyat chizmasi (chorraha, yo'l) */
-  scene?: SceneSpec;
+  scene?: SceneSpec | RoadSpec;
+  /** Piktogramma (Art.tsx dagi kalit) */
+  art?: string;
   /** 1 — oson, 2 — o'rta, 3 — qiyin */
   difficulty?: 1 | 2 | 3;
   status: QuestionStatus;
@@ -49,7 +51,9 @@ export type SignShape =
   | 'stop'
   | 'main'
   | 'mainEnd'
-  | 'plate';
+  | 'plate'
+  | 'town'
+  | 'townEnd';
 
 export interface RoadSign {
   id: string;
@@ -92,4 +96,61 @@ export interface SceneSpec {
   /** To'g'ri yo'l: har yo'nalishdagi qatorlar soni va o'rta chiziq */
   lanes?: 1 | 2;
   marking?: 'solid' | 'dashed' | 'double' | 'solid-dashed';
+}
+
+export type Marking = 'none' | 'solid' | 'dashed' | 'approach' | 'double' | 'solid-dashed' | 'dashed-solid';
+
+export interface RoadVehicle {
+  lane?: number;
+  dir?: 'up' | 'down';
+  x?: number;
+  y: number;
+  rot?: number;
+  kind?: 'car' | 'police' | 'ambulance' | 'truck' | 'bus' | 'schoolbus' | 'tram' | 'moto';
+  color?: string;
+  you?: boolean;
+  label?: string;
+  path?: 'straight' | 'change-left' | 'change-right' | 'overtake' | 'back' | 'uturn' | 'turn-left' | 'turn-right' | 'park';
+  /** Yo'l chizig'ini uzaytirish (px) */
+  dist?: number;
+  hazard?: boolean;
+  blink?: 'left' | 'right';
+  brake?: boolean;
+  beams?: 'low' | 'high';
+  parkLights?: boolean;
+  horn?: boolean;
+  door?: 'left' | 'right';
+}
+
+/** To'g'ri yo'l bo'lagi (yuqoridan ko'rinish) */
+export interface RoadSpec {
+  kind: 'road';
+  lanes?: 1 | 2 | 3;
+  oneway?: boolean;
+  center?: Marking;
+  /** y dan yuqorida o'rta chiziq boshqacha */
+  centerTo?: { y: number; marking: Marking };
+  laneMarking?: Marking;
+  yellow?: { dx?: number; dashed?: boolean };
+  stopLine?: number;
+  zebra?: number;
+  arrows?: { lane: number; y: number; dirs: ('l' | 's' | 'r')[] }[];
+  cross?: number;
+  crossMarking?: 'none' | 'dashed';
+  rails?: number;
+  barrier?: 'closed' | 'open';
+  train?: 'left' | 'right';
+  tramLane?: number;
+  side?: { y: number; x?: number; kind: 'busstop' | 'driveway' | 'house' | 'playground' }[];
+  vehicles?: RoadVehicle[];
+  peds?: { x: number; y: number; kind?: 'adult' | 'child' | 'blind'; angle?: number }[];
+  signs?: { x: number; y: number; id: string; size?: number; temp?: boolean; text?: string }[];
+  light?: { x: number; y: number; color: 'red' | 'yellow' | 'green' | 'flash' | 'redyellow'; arrow?: 'on' | 'off' };
+  triangle?: { y: number; lane?: number };
+  dims?: { x1: number; y1: number; x2: number; y2: number; label: string }[];
+  notes?: { x: number; y: number; text: string }[];
+  env?: 'night' | 'fog' | 'ice' | 'rain';
+  tow?: [number, number];
+  towRigid?: boolean;
+  yard?: boolean;
 }

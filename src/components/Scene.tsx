@@ -1,8 +1,9 @@
 // Chorraha va yo'l vaziyatlarining SVG chizmasi. Barcha transport vositalari "pastdan kelayotgan"
 // kanonik holatda chiziladi va kelish tomoniga qarab markaz atrofida aylantiriladi.
-import type { Dir, SceneCar, SceneSpec } from '../data/types';
+import type { Dir, RoadSpec, SceneCar, SceneSpec } from '../data/types';
 import { signById } from '../data/signs';
 import { RoadSign } from './RoadSign';
+import { Ped, RoadScene } from './RoadScene';
 
 const C = 150;
 const R = 40;
@@ -65,17 +66,24 @@ function Light({ x, y, color, arrow }: { x: number; y: number; color: NonNullabl
 }
 
 function Regulator({ pose, facing }: NonNullable<SceneSpec['regulator']>) {
-  const a = ANGLE[facing]; // yuzi qaragan tomon
-  const arms = pose === 'side' ? [[-22, 0], [22, 0]] : pose === 'forward' ? [[0, 22]] : [];
+  const a = ANGLE[facing]; // yuzi qaragan tomon (kanonik: pastga, +y)
+  // kanonik holatda o'ng qo'l -x tomonda, chap qo'l +x tomonda
+  const arm = (x1: number, y1: number, x2: number, y2: number, k: string) => (
+    <g key={k}>
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#1e3a8a" strokeWidth="8" strokeLinecap="round" />
+      <circle cx={x2} cy={y2} r={4} fill="#fde68a" stroke="#0f172a" strokeWidth="1" />
+    </g>
+  );
   return (
-    <g>
-      <circle cx={C} cy={C} r={14} fill="#1e3a8a" stroke="#fff" strokeWidth="2" />
-      <g transform={`rotate(${a} ${C} ${C})`}>
-        <path d={`M${C - 6} ${C + 8} L${C} ${C + 14} L${C + 6} ${C + 8}`} fill="#fde68a" />
-        {arms.map(([dx, dy], i) => <line key={i} x1={C} y1={C} x2={C + dx} y2={C + dy} stroke="#fde68a" strokeWidth="5" strokeLinecap="round" />)}
-      </g>
-      {pose === 'up' && <line x1={C} y1={C} x2={C} y2={C - 26} stroke="#fde68a" strokeWidth="5" strokeLinecap="round" />}
-      <text x={C} y={C + 4} fontSize="10" textAnchor="middle" fill="#fff" fontWeight={700}>👮</text>
+    <g transform={`rotate(${a} ${C} ${C})`}>
+      <ellipse cx={C} cy={C} rx={18} ry={11} fill="#1e3a8a" stroke="#f8fafc" strokeWidth="2" />
+      {pose === 'side' && [arm(C - 14, C, C - 38, C, 'r'), arm(C + 14, C, C + 38, C, 'l')]}
+      {pose === 'forward' && arm(C - 12, C + 2, C - 12, C + 30, 'f')}
+      {pose === 'up' && <circle cx={C - 13} cy={C - 2} r={6} fill="#fde68a" stroke="#0f172a" strokeWidth="1.5" />}
+      <circle cx={C} cy={C} r={8} fill="#f8fafc" stroke="#0f172a" strokeWidth="1" />
+      <circle cx={C} cy={C} r={5} fill="#1e3a8a" />
+      {/* yuz tomoni */}
+      <path d={`M${C - 5} ${C + 12} L${C} ${C + 18} L${C + 5} ${C + 12}`} fill="#facc15" stroke="#0f172a" strokeWidth="1" />
     </g>
   );
 }
@@ -152,7 +160,8 @@ function Rail({ s }: { s: SceneSpec }) {
   );
 }
 
-export function Scene({ scene, size = 260 }: { scene: SceneSpec; size?: number }) {
+export function Scene({ scene, size = 260 }: { scene: SceneSpec | RoadSpec; size?: number }) {
+  if (scene.kind === 'road') return <RoadScene spec={scene} size={size} />;
   const isStraight = scene.kind === 'straight';
   const isRail = scene.kind === 'rail';
   const cars = scene.cars ?? [];
@@ -172,7 +181,7 @@ export function Scene({ scene, size = 260 }: { scene: SceneSpec; size?: number }
       ))}
       {(scene.peds ?? []).map((d, i) => {
         const [x, y] = rot(C - 12 + i * 6, isStraight ? C : C + R + 17, ANGLE[d]);
-        return <text key={d + i} x={x} y={y + 7} fontSize="20" textAnchor="middle">🚶</text>;
+        return <Ped key={d + i} x={x} y={y} angle={ANGLE[d] + 90} />;
       })}
 
       {cars.map((car, i) => {

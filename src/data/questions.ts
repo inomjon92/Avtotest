@@ -1,6 +1,6 @@
 import type { Question } from './types';
 import { RAW2, RAW_SCENES } from './questions2';
-import { SCENES } from './scenes';
+import { ART_FOR, SCENES } from './scenes';
 
 // Namunaviy savollar bazasi. Rasmiy biletlar emas: rasmiy baza admin paneldan CSV orqali import qilinadi.
 // Mualliflik qulayligi uchun to'g'ri javob har doim birinchi yoziladi; ilova variantlarni aralashtiradi.
@@ -187,7 +187,7 @@ const RAW: Raw[] = [
   ['q60', 'xavfsizlik', 'xavfsizlik-1', '', 'Ishchi tormoz tizimi nosoz bo\'lsa harakatlanish mumkinmi?',
     ["Yo'q, harakatlanish taqiqlanadi", "Ha, sekin harakatlansa", "Ha, avariya chiroqlari yoqilsa"],
     "Ishchi tormoz tizimi yoki rul boshqaruvi nosoz bo'lsa, harakatlanish taqiqlanadi."],
-  ['q61', 'yordam', 'yordam-1', '6.1', 'Arterial qon ketishida birinchi yordam qanday ko\'rsatiladi?',
+  ['q61', 'yordam', 'yordam-1', '', 'Arterial qon ketishida birinchi yordam qanday ko\'rsatiladi?',
     ["Jarohatdan yuqoriga jgut qo'yiladi va vaqti yozib qo'yiladi", "Jarohatdan pastga jgut qo'yiladi", "Jarohat iliq suv bilan yuviladi"],
     "Arterial qon ketishida (och qizil, otilib chiqadigan qon) jgut jarohatdan yuqoriga qo'yiladi, qo'yilgan vaqt yozib qo'yiladi."],
   ['q62', 'yordam', 'yordam-1', '', "Jabrlanuvchi hushsiz, ammo nafas olyapti. Uni qanday holatga yotqizasiz?",
@@ -224,6 +224,7 @@ const toQuestion = ([id, topic, rule, sign, text, options, explanation]: Raw, di
   rule: rule || undefined,
   sign: sign || undefined,
   scene: SCENES[id],
+  art: ART_FOR[id],
   difficulty,
   status: 'published',
   version: 1,

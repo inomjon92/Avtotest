@@ -2,6 +2,7 @@
 import { Capacitor } from '@capacitor/core';
 import type { Question } from '../data/types';
 import type { ExamConfig } from '../lib/exam';
+import { differs, mergeProgress } from '../lib/merge';
 import {
   getSession, getState, onProgressChange, PROGRESS_KEYS, setContent, setSession, setStateQuiet,
   type AppState, type Session,
@@ -101,19 +102,34 @@ function pickProgress(s: AppState) {
   return out;
 }
 
+/** Serverdagi progressni olib, mahalliy (shu jumladan oflayn yechilgan) natijalar bilan birlashtiradi va qaytaradi. */
 export async function pullProgress() {
   if (!getSession()) return;
   const r = await api<{ state: Partial<AppState> | null; updatedAt: number }>('/progress');
   const local = getState();
-  if (r.state && (r.state.updatedAt ?? r.updatedAt) > local.updatedAt) {
-    setStateQuiet((s) => ({ ...s, ...r.state, settings: { ...s.settings, ...r.state!.settings }, updatedAt: r.state!.updatedAt ?? r.updatedAt }));
-  } else if (local.updatedAt > 0) {
-    await pushProgress();
+  const remote = r.state ? { ...r.state, updatedAt: r.state.updatedAt ?? r.updatedAt } : null;
+  if (!remote) {
+    if (local.updatedAt > 0) await pushProgress();
+    return;
   }
+  const merged = mergeProgress(local, remote);
+  setStateQuiet((s) => ({ ...s, ...merged }));
+  // Mahalliyda serverda yo'q natijalar bo'lsa, serverga yuboramiz
+  if (differs(merged, remote)) await pushProgress();
+  else lastPushed = merged.updatedAt;
+}
+
+let syncing: Promise<void> | null = null;
+/** Internet qaytganda yoki ilova ochilganda: olish + birlashtirish + yuborish */
+export function syncNow() {
+  if (!getSession()) return Promise.resolve();
+  syncing ??= pullProgress().catch(() => {}).finally(() => { syncing = null; });
+  return syncing;
 }
 
 let pushTimer: ReturnType<typeof setTimeout> | undefined;
 let pushing = false;
+let lastPushed = 0;
 
 export async function pushProgress() {
   if (!getSession() || pushing) return;
@@ -121,6 +137,7 @@ export async function pushProgress() {
   try {
     const s = getState();
     await api('/progress', { method: 'PUT', body: { state: { ...pickProgress(s), v: 1, updatedAt: s.updatedAt } } });
+    lastPushed = s.updatedAt;
   } catch { /* keyingi o'zgarishda yana urinamiz */ } finally {
     pushing = false;
   }
@@ -131,8 +148,10 @@ export function startSync() {
     clearTimeout(pushTimer);
     pushTimer = setTimeout(pushProgress, 2500);
   });
-  window.addEventListener('online', () => { pushProgress(); loadContent(); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pushProgress(); });
+  window.addEventListener('online', () => { syncNow(); loadContent(); });
+  document.addEventListener('visibilitychange', () => { document.visibilityState === 'hidden' ? pushProgress() : syncNow(); });
+  // Oflayn paytda yuborilmay qolgan natijalarni vaqti-vaqti bilan qayta urinib ko'ramiz
+  setInterval(() => { if (navigator.onLine && getState().updatedAt > lastPushed) syncNow(); }, 60_000);
 }
 
 // ---- Umumiy kontent ----
