@@ -50,7 +50,7 @@ jobs:
       - run: npm run build
         env:
           # Ilova serverga ulanishi uchun: Settings → Variables → API_URL (masalan https://avtotest.vercel.app)
-          VITE_API_URL: ${{ vars.API_URL }}
+          VITE_API_URL: ${{ vars.API_URL || 'https://avtotest-xi.vercel.app' }}
       - name: Android loyihasini yaratish
         run: |
           npx cap add android
