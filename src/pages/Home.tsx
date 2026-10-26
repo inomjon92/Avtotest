@@ -1,0 +1,86 @@
+import { Link } from 'react-router-dom';
+import { Card, PageHeader, Progress, toneFor } from '../components/ui';
+import { EXAM_TIPS } from '../data/extra';
+import { readinessIndex } from '../lib/exam';
+import { isDue, isMastered } from '../lib/srs';
+import { dayStreak, publishedQuestions, todayKey, useStore } from '../store/store';
+import { useT } from '../store/i18n';
+
+export default function Home() {
+  const { t, tc } = useT();
+  const s = useStore((x) => x);
+  const pool = publishedQuestions(s);
+  const mastered = pool.filter((q) => isMastered(s.stats[q.id])).length;
+  const pct = pool.length ? Math.round((mastered / pool.length) * 100) : 0;
+  const mistakes = pool.filter((q) => s.stats[q.id]?.inMistakes).length;
+  const due = pool.filter((q) => isDue(s.stats[q.id])).length;
+  const exams = s.attempts.filter((a) => a.mode === 'exam');
+  const readiness = readinessIndex(exams.map((a) => ({ passed: !!a.passed, correct: a.correct, total: a.total })));
+  const streak = dayStreak(s.activity);
+  const today = s.activity[todayKey()] ?? 0;
+
+  const daysLeft = s.settings.examDate ? Math.ceil((new Date(s.settings.examDate).getTime() - Date.now()) / 86400000) : null;
+  const left = pool.length - mastered;
+  const planPerDay = daysLeft && daysLeft > 0 ? Math.max(10, Math.ceil((left * 2) / daysLeft)) : s.settings.dailyGoal;
+  const goal = planPerDay;
+  const examDay = daysLeft !== null && daysLeft >= 0 && daysLeft <= 1;
+
+  return (
+    <div className="page">
+      <PageHeader title="Avtotest · B" back={false} right={<Link to="/settings" className="icon-btn" aria-label={t('Sozlamalar')}>⚙️</Link>} />
+
+      <section className="hero">
+        <div>
+          <p className="muted">{t('Salom')}{s.settings.name ? `, ${s.settings.name}` : ''}!</p>
+          <h2>{t('Umumiy progress')}: {pct}%</h2>
+          <Progress value={pct} tone={toneFor(pct)} />
+          <p className="muted small">{t("O'zlashtirilgan")}: {mastered} / {pool.length} {t('savol')}</p>
+        </div>
+        <div className="hero-stats">
+          <div><b>🔥 {streak}</b><span>{t('Kunlik seriya')}</span></div>
+          <div><b>{readiness === null ? '—' : readiness + '%'}</b><span>{t('Tayyorlik indeksi')}</span></div>
+          <div><b>{today}/{goal}</b><span>{t('Bugun')}</span></div>
+        </div>
+      </section>
+
+      {examDay && (
+        <section className="notice">
+          <b>🗓 {t('Imtihon kuni rejimi')}</b>
+          <p>{daysLeft === 0 ? 'Imtihon bugun!' : 'Imtihon ertaga!'} Faqat xatolaringizni takrorlang va dam oling.</p>
+          <Link className="btn" to="/quiz/mistakes">{t('Xatolar ustida ishlash')} ({mistakes})</Link>
+        </section>
+      )}
+
+      <Link to="/quiz/exam" className="cta">
+        <span className="cta-icon">🎓</span>
+        <span><b>{t('Imtihon simulyatori')}</b><br /><small>{s.exam.questionCount} {t('savol')} · {s.exam.minutes} {t('daqiqa')} · {s.exam.maxErrors} {t('xato')}</small></span>
+        <span>→</span>
+      </Link>
+
+      <div className="grid">
+        <Card to="/tests#tickets" icon="🎫" title={t('Biletlar')} />
+        <Card to="/tests#topics" icon="📚" title={t('Mavzular')} />
+        <Card to="/quiz/review" icon="🧠" title={t('Aqlli takrorlash')} badge={due || undefined} />
+        <Card to="/quiz/mistakes" icon="❌" title={t('Xatolar ustida ishlash')} badge={mistakes || undefined} />
+        <Card to="/quiz/favorites" icon="★" title={t('Saralanganlar')} badge={s.favorites.length || undefined} />
+        <Card to="/quiz/marathon" icon="🏃" title={t('Marafon')} subtitle={s.marathon.index ? `${s.marathon.index + 1}-savoldan davom` : undefined} />
+        <Card to="/guide/signs" icon="⚠️" title={t("Yo'l belgilari")} />
+        <Card to="/guide" icon="📖" title={t("Yo'riqnoma")} />
+      </div>
+
+      {daysLeft !== null && daysLeft > 1 && (
+        <section className="panel">
+          <h3>{t("Shaxsiy o'quv reja")}</h3>
+          <p>{t('Imtihongacha')} <b>{daysLeft}</b> {t('kun')}. {t('Har kuni kamida')} <b>{planPerDay}</b> {t('ta savol ishlang')}.</p>
+          <Progress value={(today / planPerDay) * 100} tone={today >= planPerDay ? 'good' : 'warn'} />
+        </section>
+      )}
+      {!s.settings.examDate && <p className="muted small center"><Link to="/settings">Imtihon sanasini kiriting</Link> — shaxsiy kunlik reja tuziladi.</p>}
+
+      <section className="panel">
+        <h3>💡 {t('Maslahat')}</h3>
+        <p>{tc(EXAM_TIPS[new Date().getDate() % EXAM_TIPS.length])}</p>
+      </section>
+    </div>
+  );
+}

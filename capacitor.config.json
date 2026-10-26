@@ -1,0 +1,6 @@
+{
+  "appId": "uz.avtotest.app",
+  "appName": "Avtotest",
+  "webDir": "dist",
+  "android": { "allowMixedContent": false }
+}
