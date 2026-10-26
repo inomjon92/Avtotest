@@ -118,7 +118,7 @@ function ChangePassword() {
       catch (err) { setMsg(err instanceof Error ? err.message : 'Xatolik'); }
     }}>
       <label>Joriy parol<input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></label>
-      <label>Yangi parol<input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={8} required /></label>
+      <label>Yangi parol<input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={5} required /></label>
       {msg && <p className="small">{msg}</p>}
       <div className="row-wrap"><button className="btn small">Saqlash</button><button type="button" className="btn ghost small" onClick={() => setOpen(false)}>Yopish</button></div>
     </form>

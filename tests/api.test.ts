@@ -41,8 +41,8 @@ describe.skipIf(!enabled)('server API', () => {
 
   it("admin loginini oddiy foydalanuvchi egallay olmaydi, kuchsiz parol rad etiladi", async () => {
     expect((await call('/auth?action=register', { body: { login: 'boshliq', password: 'secret123', name: 'X' } })).status).toBe(409);
-    expect((await call('/auth?action=register', { body: { login: 'zaif' + suffix, password: 'qisqa', name: 'X' } })).status).toBe(400);
-    expect((await call('/auth?action=register', { body: { login: 'zaif' + suffix, password: 'faqatharflar', name: 'X' } })).status).toBe(400);
+    expect((await call('/auth?action=register', { body: { login: 'zaif' + suffix, password: '1234', name: 'X' } })).status).toBe(400);
+    expect((await call('/auth?action=register', { body: { login: 'raqam' + suffix, password: '12345', name: 'X' } })).status).toBe(200);
   });
 
   it("ro'yxatdan o'tgan foydalanuvchi o'quvchi, login band bo'lsa rad etiladi", async () => {
@@ -83,7 +83,7 @@ describe.skipIf(!enabled)('server API', () => {
     const l = await call('/admin?action=logins', { token: adminToken });
     expect(l.data.logins.filter((x: any) => x.login === 'ali' + suffix)).toHaveLength(2);
     const o = await call('/admin?action=overview', { token: adminToken });
-    expect(o.data.counts.users).toBe(1);
+    expect(o.data.counts.users).toBe(2);
     expect(o.data.questions.q1.wrong).toBe(1);
   });
 

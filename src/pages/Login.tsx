@@ -43,13 +43,13 @@ export default function Login() {
           <form className="form" onSubmit={submit}>
             {mode === 'register' && <label>{t('Ism')}<input value={form.name} onChange={set('name')} autoComplete="name" required placeholder="Ism Familiya" /></label>}
             <label>{t('Login')}<input value={form.login} onChange={set('login')} autoComplete="username" autoCapitalize="none" required placeholder="masalan: akbar" /></label>
-            <label>{t('Parol')}<input type="password" value={form.password} onChange={set('password')} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 8 : 1} /></label>
+            <label>{t('Parol')}<input type="password" value={form.password} onChange={set('password')} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 5 : 1} /></label>
             {mode === 'register' && <label>{t('Parolni takrorlang')}<input type="password" value={form.password2} onChange={set('password2')} autoComplete="new-password" required /></label>}
             <label className="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> {t('Meni eslab qol')}</label>
             {error && <p className="bad-text small">{error}</p>}
             <button className="btn" disabled={busy}>{busy ? '…' : mode === 'login' ? t('Kirish') : t("Ro'yxatdan o'tish")}</button>
           </form>
-          {mode === 'register' && <p className="muted small">Login: lotin harflari, raqamlar, _ yoki . (3–32 belgi). Parol kamida 8 belgi, harf va raqam bilan.</p>}
+          {mode === 'register' && <p className="muted small">Login: lotin harflari, raqamlar, _ yoki . (3–32 belgi). Parol kamida 5 belgi (masalan 5 xonali raqam).</p>}
           {mode === 'login' && <p className="muted small">Hisobingiz yo'qmi? <button className="link-btn" onClick={() => setMode('register')}>{t("Ro'yxatdan o'ting")}</button></p>}
         </>) : (<>
           <p className="notice small">Server manzili sozlanmagan, shuning uchun hisobga kirib bo'lmaydi. Ilovadan mehmon sifatida foydalanishingiz mumkin.</p>

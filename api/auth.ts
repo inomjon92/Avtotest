@@ -8,8 +8,8 @@ const LOGIN_RE = /^[a-z0-9_.]{3,32}$/;
 const publicUser = (u: UserRow) => ({ id: u.id, login: u.login, name: u.name, role: 'student' as const });
 
 function checkPassword(pw: string) {
-  if (pw.length < 8) throw new HttpError(400, "Parol kamida 8 belgidan iborat bo'lishi kerak");
-  if (!/[a-zA-Z]/.test(pw) || !/\d/.test(pw)) throw new HttpError(400, "Parolda kamida bitta harf va bitta raqam bo'lishi kerak");
+  if (pw.length < 5) throw new HttpError(400, "Parol kamida 5 belgidan iborat bo'lishi kerak");
+  if (pw.length > 128) throw new HttpError(400, 'Parol juda uzun');
 }
 
 export default handler(async (req) => {
