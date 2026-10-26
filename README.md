@@ -66,7 +66,7 @@ Xavfsizlik: parollar scrypt bilan xeshlanadi, tokenlar HMAC bilan imzolanadi, 15
 
 ## Android APK
 
-Ilova serverga ulanishi uchun repo → *Settings → Secrets and variables → Actions → Variables* bo'limida `API_URL` = Vercel manzilingiz (masalan `https://avtotest.vercel.app`) qo'shing.
+Ilova serverga ulanishi uchun repo → *Settings → Secrets and variables → Actions → Variables* bo'limida `API_URL` orqali Vercel manzilini o'zgartirish mumkin (standart: `https://avtotest-xi.vercel.app`).
 
 **Avtomatik (tavsiya):** `main` ga har push'da GitHub Actions APK yig'adi. Telefondan yuklab olish: repo → *Releases* → **Avtotest APK (oxirgi versiya)** → `avtotest.apk`. Yoki *Actions* → oxirgi ish → *Artifacts*.
 
