@@ -1,4 +1,5 @@
 import type { RoadSpec, RoadVehicle, SceneSpec } from './types';
+import { SCENES4 } from './scenes4';
 
 // Savollarga biriktirilgan vaziyat chizmalari (savol id -> chizma).
 const you = (turn: 'straight' | 'left' | 'right' | 'uturn' | 'stop' = 'straight') => ({ from: 's' as const, you: true, turn });
@@ -158,6 +159,8 @@ Object.assign(SCENES, {
   q194: road({ signs: [{ x: 228, y: 40, id: '5.24', size: 62 }], vehicles: [A(150, { kind: 'truck' }), Y(240, { horn: true, blink: 'left' })], notes: [q(80, 240)] }),
 } satisfies Record<string, RoadSpec>);
 
+Object.assign(SCENES, SCENES4);
+
 /** Piktogramma bilan ko'rsatiladigan savollar */
 export const ART_FOR: Record<string, string> = {
   q23: 'light-green-flash', q24: 'light-yellow', q93: 'light-arrow-off', q98: 'reversible',
@@ -165,5 +168,12 @@ export const ART_FOR: Record<string, string> = {
   q61: 'aid-arterial', q62: 'aid-unconscious', q63: 'aid-burn', q64: 'aid-fracture', q145: 'aid-cpr', q146: 'aid-venous',
   q147: 'aid-nose', q148: 'aid-spine', q149: 'aid-faint', q150: 'aid-shock',
   q57: 'phone', q58: 'belts', q59: 'docs', q60: 'brake', q140: 'wiper', q141: 'kit', q142: 'childseat',
+  q396: 'light-red', q397: 'light-green', q398: 'light-ped', q399: 'light-tram', q400: 'hand-left', q401: 'tire', q402: 'steering-play',
+  q403: 'headlight', q404: 'oil', q405: 'mirror', q406: 'mirror', q407: 'exhaust', q408: 'aid-choke', q409: 'aid-heat', q410: 'aid-cold',
+  q411: 'aid-eye', q412: 'aid-head', q413: 'aid-chest', q414: 'aid-call', q415: 'aid-car-victim', q416: 'aid-gloves', q417: 'kit', q418: 'aid-arterial',
+  q419: 'aid-arterial', q420: 'aid-burn', q421: 'aid-nose', q422: 'aid-unconscious', q423: 'aid-cpr', q424: 'aid-fracture', q425: 'license',
+  q426: 'license', q427: 'insurance', q428: 'license', q429: 'belts', q430: 'phone', q431: 'childseat', q432: 'alcohol', q433: 'tired', q434: 'brake',
+  q435: 'brake', q436: 'wiper', q437: 'kit', q439: 'alcohol', q440: 'pills', q441: 'light-ped', q442: 'light-red', q443: 'light-green',
+  q444: 'aid-faint', q445: 'aid-call', q446: 'aid-venous', q447: 'aid-faint', q448: 'aid-shock', q449: 'aid-venous', q450: 'aid-choke',
   q66: 'passenger', q196: 'aid-arterial', q197: 'aid-cpr', q198: 'passenger', q67: 'alcohol', q75: 'pills', q76: 'tired',
 };

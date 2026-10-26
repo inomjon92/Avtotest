@@ -1,6 +1,8 @@
 import type { Question } from './types';
 import { RAW2, RAW_SCENES } from './questions2';
 import { RAW3 } from './questions3';
+import { RAW4 } from './questions4';
+import { RAW4B } from './scenes4';
 import { ART_FOR, SCENES } from './scenes';
 
 // Namunaviy savollar bazasi. Rasmiy biletlar emas: rasmiy baza admin paneldan CSV orqali import qilinadi.
@@ -233,5 +235,5 @@ const toQuestion = ([id, topic, rule, sign, text, options, explanation]: Raw, di
 
 export const BASE_QUESTIONS: Question[] = [
   ...RAW.map((r) => toQuestion(r, 1)),
-  ...[...RAW2, ...RAW_SCENES, ...RAW3].map(([id, topic, rule, sign, text, options, explanation, d]) => toQuestion([id, topic, rule, sign, text, options, explanation], d)),
+  ...[...RAW2, ...RAW_SCENES, ...RAW3, ...RAW4, ...RAW4B].map(([id, topic, rule, sign, text, options, explanation, d]) => toQuestion([id, topic, rule, sign, text, options, explanation], d)),
 ];

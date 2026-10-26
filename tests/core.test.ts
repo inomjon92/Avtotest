@@ -102,3 +102,24 @@ describe('kontent yaxlitligi', () => {
     expect(new Set(BASE_QUESTIONS.map((q) => q.id)).size).toBe(BASE_QUESTIONS.length);
   });
 });
+
+describe("savollar bazasi to'liqligi", () => {
+  it("har bir savolda rasm, belgi yoki chizma bor va ular mavjud", async () => {
+    const { ART_KEYS } = await import('../src/components/Art');
+    const signIds = new Set(SIGNS.map((s) => s.id));
+    for (const q of BASE_QUESTIONS) {
+      const ok = !!q.scene || !!q.image || (!!q.art && ART_KEYS.includes(q.art)) || (!!q.sign && signIds.has(q.sign));
+      expect(ok, q.id).toBe(true);
+    }
+    expect(BASE_QUESTIONS.length).toBeGreaterThanOrEqual(450);
+  });
+  it("variantlar takrorlanmaydi va qoida bo'limlari mavjud", () => {
+    const ruleIds = new Set(RULES.map((r) => r.id));
+    const topicIds = new Set(TOPICS.map((t) => t.id));
+    for (const q of BASE_QUESTIONS) {
+      expect(new Set(q.options).size, q.id).toBe(q.options.length);
+      if (q.rule) expect(ruleIds.has(q.rule), q.id).toBe(true);
+      expect(topicIds.has(q.topic), q.id).toBe(true);
+    }
+  });
+});

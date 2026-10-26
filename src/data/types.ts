@@ -55,7 +55,8 @@ export type SignShape =
   | 'mainEnd'
   | 'plate'
   | 'town'
-  | 'townEnd';
+  | 'townEnd'
+  | 'endzone';
 
 export interface RoadSign {
   id: string;
