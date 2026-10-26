@@ -30,6 +30,8 @@ export default function Tests() {
         <Card to="/quiz/mistakes" icon="❌" title={t('Xatolar ustida ishlash')} />
         <Card to="/quiz/favorites" icon="★" title={t('Saralanganlar')} />
         <Card to="/quiz/marathon" icon="🏃" title={t('Marafon')} subtitle={`${pool.length} ${t('savol')}`} />
+        <Card to="/quiz/mixed" icon="🔀" title={t('Aralash savollar')} subtitle={t('Barcha mavzulardan 20 ta tasodifiy savol')} />
+        <Card to="/quiz/weak" icon="🎯" title={t('Zaif mavzular mashqi')} subtitle={t("Eng ko'p xato qilgan mavzularingiz")} />
         <Card to="/quiz/hard" icon="💪" title={t('Qiyin savollar')} subtitle={t('Murakkab vaziyatlar va xatolaringiz')} />
       </div>
 

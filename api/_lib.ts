@@ -76,6 +76,28 @@ async function migrate(s: Sql) {
     status text not null default 'new',
     at timestamptz not null default now()
   )`;
+  // Foydalanuvchilar yuborgan savollar (admin tasdiqlagach hammaga chiqadi)
+  await s`create table if not exists submissions (
+    id bigserial primary key,
+    user_id int not null references users(id) on delete cascade,
+    question jsonb not null,
+    status text not null default 'pending',
+    note text not null default '',
+    created_at timestamptz not null default now(),
+    reviewed_at timestamptz
+  )`;
+  // Chat-bot javob topa olmagan savollar va admin javoblari
+  await s`create table if not exists messages (
+    id bigserial primary key,
+    user_id int not null references users(id) on delete cascade,
+    text text not null,
+    answer text,
+    created_at timestamptz not null default now(),
+    answered_at timestamptz,
+    seen boolean not null default false
+  )`;
+  await s`create index if not exists logins_at on logins (at)`;
+  await s`create index if not exists logins_user_at on logins (user_id, at)`;
 }
 
 export class HttpError extends Error {

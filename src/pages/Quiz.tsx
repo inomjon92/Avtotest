@@ -17,6 +17,7 @@ import {
 } from '../store/store';
 import { useT } from '../store/i18n';
 import { sendReport } from '../store/api';
+import { mixedQuestions, topicScores, weakPractice, weakTopics } from '../lib/analysis';
 
 interface QuizSpec { title: string; questions: Question[]; mode: Mode }
 
@@ -47,6 +48,12 @@ export function resolveQuiz(s: AppState, mode: Mode, param?: string): QuizSpec {
       const rate = (id: string) => { const st = s.stats[id]; return st ? st.wrong / Math.max(1, st.correct + st.wrong) : 0; };
       const hard = pool.filter((q) => (q.difficulty ?? 1) >= 3 || rate(q.id) >= 0.5);
       return { mode, title: 'Qiyin savollar', questions: shuffle(hard).slice(0, 30) };
+    }
+    case 'mixed':
+      return { mode, title: 'Aralash savollar', questions: mixedQuestions(pool, 20) };
+    case 'weak': {
+      const weak = weakTopics(topicScores(pool, s.stats), 2).map((w) => w.topic);
+      return { mode, title: 'Zaif mavzular mashqi', questions: weakPractice(pool, s.stats, weak.length ? weak : [...new Set(pool.map((q) => q.topic))], 20) };
     }
     default:
       return { mode, title: 'Test', questions: [] };
@@ -205,7 +212,7 @@ export default function Quiz() {
           <button className="sign-btn" onClick={() => setZoom(true)} aria-label="Kattalashtirish"><QuestionMedia q={q} size={150} /></button>
         </div>
         <div className="q-meta">
-          <span>{t('Savol')} {index + 1} / {spec.questions.length}</span>
+          <span>{t('Savol')} {index + 1} / {spec.questions.length}{q.author && <> · 👤 {q.author}</>}</span>
           <span className="q-tools">
             <button className="icon-btn" onClick={speak} title={t("Ovozli o'qish")} aria-label={t("Ovozli o'qish")}>🔊</button>
             <button className="icon-btn" onClick={() => toggleFavorite(q.id)} title={t('Saralash')} aria-pressed={favorites.includes(q.id)}>{favorites.includes(q.id) ? '★' : '☆'}</button>

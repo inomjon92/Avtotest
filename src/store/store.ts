@@ -3,10 +3,11 @@ import type { Question } from '../data/types';
 import { BASE_QUESTIONS } from '../data/questions';
 import { DEFAULT_BHM } from '../data/extra';
 import { DEFAULT_EXAM, type ExamConfig } from '../lib/exam';
+import type { FaqItem } from '../lib/chatbot';
 import { applyAnswer, type QStat } from '../lib/srs';
 
 export type Lang = 'uz' | 'uzc' | 'ru';
-export type Mode = 'ticket' | 'topic' | 'exam' | 'mistakes' | 'favorites' | 'marathon' | 'review' | 'hard' | 'custom';
+export type Mode = 'ticket' | 'topic' | 'exam' | 'mistakes' | 'favorites' | 'marathon' | 'review' | 'hard' | 'mixed' | 'weak' | 'custom';
 
 export interface Attempt {
   id: string;
@@ -59,6 +60,8 @@ export interface AppState {
   reports: Report[];
   /** Admin tahrirlagan/qo'shgan savollar (serverdan keladi) */
   customQuestions: Record<string, Question>;
+  /** Admin tahrirlagan chat-bot javoblari (serverdan keladi) */
+  faq: FaqItem[] | null;
   versions: Record<string, Question[]>;
 }
 
@@ -78,6 +81,7 @@ export const initialState = (): AppState => ({
   rulesRead: {},
   reports: [],
   customQuestions: {},
+  faq: null,
   versions: {},
 });
 
@@ -153,7 +157,7 @@ export function getSession() { return session; }
 export function isGuest() { return guest; }
 
 export function setSession(next: Session | null, remember = true) {
-  const content = { customQuestions: state.customQuestions, exam: state.exam };
+  const content = { customQuestions: state.customQuestions, exam: state.exam, faq: state.faq };
   session = next;
   try {
     localStorage.removeItem(SESSION_KEY);
@@ -219,8 +223,8 @@ export function setMarathon(m: AppState['marathon']) {
 }
 
 // Kontent (savollar, imtihon formati) — barcha foydalanuvchilar uchun umumiy, serverdan keladi
-export function setContent(customQuestions: Record<string, Question>, exam?: ExamConfig | null) {
-  setStateQuiet((s) => ({ ...s, customQuestions, exam: exam ? { ...DEFAULT_EXAM, ...exam } : s.exam }));
+export function setContent(customQuestions: Record<string, Question>, exam?: ExamConfig | null, faq?: FaqItem[] | null) {
+  setStateQuiet((s) => ({ ...s, customQuestions, exam: exam ? { ...DEFAULT_EXAM, ...exam } : s.exam, faq: faq === undefined ? s.faq : faq }));
 }
 
 export function addLocalReport(r: Omit<Report, 'id' | 'at' | 'status'>) {

@@ -8,11 +8,12 @@ export default handler(async (req) => {
   const action = q(req, 'action');
 
   if (req.method === 'GET' && !action) {
-    const rows = await s<{ key: string; value: unknown; updated_at: Date }[]>`select key, value, updated_at from settings where key in ('questions', 'exam')`;
+    const rows = await s<{ key: string; value: unknown; updated_at: Date }[]>`select key, value, updated_at from settings where key in ('questions', 'exam', 'faq')`;
     const get = (k: string) => rows.find((r) => r.key === k);
     return {
       questions: get('questions')?.value ?? {},
       exam: get('exam')?.value ?? null,
+      faq: get('faq')?.value ?? null,
       updatedAt: Math.max(0, ...rows.map((r) => r.updated_at.getTime())),
     };
   }
@@ -30,6 +31,15 @@ export default handler(async (req) => {
   if (req.method === 'PUT' && action === 'exam') {
     await requireAdmin(req);
     await s`insert into settings (key, value) values ('exam', ${s.json(req.body?.exam ?? {})})
+            on conflict (key) do update set value = excluded.value, updated_at = now()`;
+    return { ok: true };
+  }
+
+  if (req.method === 'PUT' && action === 'faq') {
+    await requireAdmin(req);
+    const faq = req.body?.faq;
+    if (!Array.isArray(faq) || JSON.stringify(faq).length > 300_000) throw new HttpError(400, "Noto'g'ri ma'lumot");
+    await s`insert into settings (key, value) values ('faq', ${s.json(faq)})
             on conflict (key) do update set value = excluded.value, updated_at = now()`;
     return { ok: true };
   }

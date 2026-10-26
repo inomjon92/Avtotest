@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Link } from 'react-router-dom';
 import { Empty, Modal, PageHeader } from '../components/ui';
 import { RoadSign } from '../components/RoadSign';
 import type { Question, QuestionStatus } from '../data/types';
@@ -12,15 +11,21 @@ import { allQuestions, getState, recordVersion, useStore } from '../store/store'
 import { adminLogin, api, getAdminToken, saveContentQuestions, saveExamConfig, setAdminToken, subscribeAdmin } from '../store/api';
 import { QuestionMedia } from './Quiz';
 import { download } from './Settings';
+import { resizeImage } from '../lib/image';
+import Gallery from './Gallery';
+import { DEFAULT_FAQ, type FaqItem } from '../lib/chatbot';
+import { loadContent, saveFaq } from '../store/api';
 
 const NO_VERSIONS: Question[] = [];
 const STATUS_LABEL: Record<QuestionStatus, string> = { draft: 'Qoralama', review: 'Tekshiruvda', published: 'Nashr qilingan', archived: 'Arxiv' };
-type Tab = 'overview' | 'users' | 'logins' | 'questions' | 'import' | 'stats' | 'reports' | 'exam' | 'security';
+type Tab = 'overview' | 'users' | 'activity' | 'logins' | 'questions' | 'submissions' | 'reports' | 'chatbot' | 'gallery' | 'import' | 'stats' | 'exam' | 'security';
 
 const TABS: [Tab, string][] = [
-  ['overview', 'Umumiy'], ['users', 'Foydalanuvchilar'], ['logins', 'Kirishlar tarixi'], ['questions', 'Savollar'],
-  ['import', 'Import / eksport'], ['stats', 'Savol statistikasi'], ['reports', 'Xato xabarlari'], ['exam', 'Imtihon formati'], ['security', 'Admin kirishlari'],
+  ['overview', 'Umumiy'], ['users', 'Foydalanuvchilar'], ['activity', 'Eng faollar'], ['logins', 'Kirishlar tarixi'], ['questions', 'Savollar'],
+  ['submissions', 'Yuborilgan savollar'], ['reports', 'Xato xabarlari'], ['chatbot', 'Chat-bot'], ['gallery', 'Rasmlar'],
+  ['import', 'Import / eksport'], ['stats', 'Savol statistikasi'], ['exam', 'Imtihon formati'], ['security', 'Admin kirishlari'],
 ];
+const KIND_LABEL: Record<string, string> = { register: "Ro'yxatdan o'tdi", login: 'Kirdi (parol bilan)', open: 'Ilovani ochdi' };
 
 const fmtDate = (v?: string | number | null) => (v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 
@@ -77,7 +82,6 @@ function AdminLoginForm() {
         <label>Parol<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>
         {error && <p className="bad-text small">{error}</p>}
         <button className="btn" disabled={busy}>{busy ? '…' : 'Kirish'}</button>
-        <Link to="/" className="small center">← Ilovaga qaytish</Link>
       </form>
     </div>
   );
@@ -86,22 +90,41 @@ function AdminLoginForm() {
 export default function Admin() {
   const token = useSyncExternalStore(subscribeAdmin, getAdminToken, getAdminToken);
   const [tab, setTab] = useState<Tab>('overview');
+  const [counts, setCounts] = useState<Overview['counts'] | null>(null);
+  // Yangi xabarlar sonini (belgilar) har daqiqada yangilab turamiz
+  const refreshCounts = useCallback(() => { if (getAdminToken()) api<Overview>('/admin?action=overview', { admin: true }).then((r) => setCounts(r.counts)).catch(() => {}); }, []);
+  useEffect(() => {
+    if (!token) return;
+    refreshCounts();
+    const id = setInterval(refreshCounts, 60_000);
+    return () => clearInterval(id);
+  }, [token, refreshCounts]);
+  useEffect(refreshCounts, [tab, refreshCounts]);
 
   if (!token) return <AdminLoginForm />;
+  const badge: Partial<Record<Tab, number>> = { reports: counts?.reports_new, submissions: counts?.submissions_pending, chatbot: counts?.messages_new };
 
   return (
     <div className="page wide">
-      <PageHeader title="Admin panel" right={<button className="btn ghost small" onClick={() => setAdminToken(null)}>Chiqish</button>} />
+      <PageHeader title="Admin panel" back={false} right={<button className="btn ghost small" onClick={() => setAdminToken(null)}>Chiqish</button>} />
       <div className="chips">
-        {TABS.map(([id, l]) => <button key={id} className={'chip ' + (tab === id ? 'active' : '')} onClick={() => setTab(id)}>{l}</button>)}
+        {TABS.map(([id, l]) => (
+          <button key={id} className={'chip ' + (tab === id ? 'active' : '')} onClick={() => setTab(id)}>
+            {l}{!!badge[id] && <span className="badge tab-badge">{badge[id]}</span>}
+          </button>
+        ))}
       </div>
       {tab === 'overview' && <OverviewTab go={setTab} />}
       {tab === 'users' && <UsersTab />}
+      {tab === 'activity' && <ActivityTab />}
       {tab === 'logins' && <LoginsTab />}
       {tab === 'questions' && <QuestionsTab />}
+      {tab === 'submissions' && <SubmissionsTab onChange={refreshCounts} />}
+      {tab === 'reports' && <ReportsTab onChange={refreshCounts} />}
+      {tab === 'chatbot' && <ChatbotTab onChange={refreshCounts} />}
+      {tab === 'gallery' && <Gallery />}
       {tab === 'import' && <ImportTab />}
       {tab === 'stats' && <StatsTab />}
-      {tab === 'reports' && <ReportsTab />}
       {tab === 'exam' && <ExamTab />}
       {tab === 'security' && <SecurityTab />}
     </div>
@@ -111,7 +134,7 @@ export default function Admin() {
 // ---------- Umumiy ----------
 
 interface Overview {
-  counts: { users: number; active_day: number; active_week: number; new_week: number; logins_day: number; reports_new: number };
+  counts: { users: number; active_day: number; active_week: number; new_week: number; logins_day: number; reports_new: number; submissions_pending: number; messages_new: number };
   questions: Record<string, { correct: number; wrong: number; users: number }>;
 }
 
@@ -129,7 +152,10 @@ function OverviewTab({ go }: { go: (t: Tab) => void }) {
         <button className="tile" onClick={() => go('users')}><span>7 kunda faol</span><b>{c.active_week}</b></button>
         <button className="tile" onClick={() => go('users')}><span>7 kunda yangi</span><b>{c.new_week}</b></button>
         <button className="tile" onClick={() => go('logins')}><span>Bugungi kirishlar</span><b>{c.logins_day}</b></button>
-        <button className="tile" onClick={() => go('reports')}><span>Yangi xato xabarlari</span><b>{c.reports_new}</b></button>
+        <button className="tile" onClick={() => go('reports')}><span>Yangi xato xabarlari</span><b className={c.reports_new ? 'bad-text' : ''}>{c.reports_new}</b></button>
+        <button className="tile" onClick={() => go('submissions')}><span>Tekshiruvdagi savollar</span><b className={c.submissions_pending ? 'bad-text' : ''}>{c.submissions_pending}</b></button>
+        <button className="tile" onClick={() => go('chatbot')}><span>Javobsiz chat savollari</span><b className={c.messages_new ? 'bad-text' : ''}>{c.messages_new}</b></button>
+        <button className="tile" onClick={() => go('activity')}><span>Eng faol foydalanuvchilar</span><b>→</b></button>
       </div>
       <p className="muted small">Jami berilgan javoblar: {answers}. Ma'lumotlar foydalanuvchilar ilovani ochganda va javob berganda yangilanadi.</p>
     </>
@@ -231,7 +257,7 @@ function UserModal({ id, onClose, onChanged }: { id: number; onClose: () => void
 
           <h4>Kirishlar tarixi</h4>
           <ul className="plain small">
-            {data.logins.map((l, i) => <li key={i}>{fmtDate(l.at)} · {l.kind === 'register' ? "ro'yxatdan o'tdi" : 'kirdi'} · <span className="mono">{l.ip || '—'}</span> · {device(l.agent)}</li>)}
+            {data.logins.map((l, i) => <li key={i}>{fmtDate(l.at)} · {(KIND_LABEL[l.kind] ?? l.kind).toLowerCase()} · <span className="mono">{l.ip || '—'}</span> · {device(l.agent)}</li>)}
           </ul>
 
           <div className="row-wrap">
@@ -257,7 +283,7 @@ function LoginsTab() {
         <table className="table">
           <thead><tr><th>Vaqt</th><th>Foydalanuvchi</th><th>Amal</th><th>IP</th><th>Qurilma</th></tr></thead>
           <tbody>{data.logins.map((l) => (
-            <tr key={l.id}><td className="nowrap">{fmtDate(l.at)}</td><td>{l.name}<br /><span className="muted small">@{l.login}</span></td><td>{l.kind === 'register' ? "Ro'yxatdan o'tdi" : 'Kirdi'}</td><td className="mono small">{l.ip || '—'}</td><td className="small">{device(l.agent)}</td></tr>
+            <tr key={l.id}><td className="nowrap">{fmtDate(l.at)}</td><td>{l.name}<br /><span className="muted small">@{l.login}</span></td><td>{KIND_LABEL[l.kind] ?? l.kind}</td><td className="mono small">{l.ip || '—'}</td><td className="small">{device(l.agent)}</td></tr>
           ))}</tbody>
         </table>
       )}
@@ -309,25 +335,7 @@ function QuestionsTab() {
   );
 }
 
-/** Rasmni brauzerda kichraytirib, JPEG data URL ga aylantiradi (server hajmini tejash uchun). */
-function resizeImage(file: File, max = 900): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const k = Math.min(1, max / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * k);
-      canvas.height = Math.round(img.height * k);
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(img.src);
-      resolve(canvas.toDataURL('image/jpeg', 0.8));
-    };
-    img.onerror = () => reject(new Error("Rasmni o'qib bo'lmadi"));
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-function QuestionEditor({ initial, onClose }: { initial: Question; onClose: () => void }) {
+function QuestionEditor({ initial, onClose, onSaved }: { initial: Question; onClose: () => void; onSaved?: () => void }) {
   const versions = useStore((s) => s.versions[initial.id] ?? NO_VERSIONS);
   const [q, setQ] = useState<Question>({ ...initial, options: [...initial.options] });
   const [err, setErr] = useState('');
@@ -340,14 +348,14 @@ function QuestionEditor({ initial, onClose }: { initial: Question; onClose: () =
     if (!q.text.trim()) return setErr('Savol matnini kiriting');
     if (opts.filter(Boolean).length < 2 || opts.some((o) => !o)) return setErr("Kamida 2 ta to'ldirilgan variant kerak (bo'shlarini o'chiring)");
     setBusy(true);
-    try { await persistQuestion({ ...q, options: opts, status: status ?? q.status }); onClose(); }
+    try { await persistQuestion({ ...q, options: opts, status: status ?? q.status }); onSaved?.(); onClose(); }
     catch (e) { setErr(e instanceof Error ? e.message : 'Saqlab bo\'lmadi'); }
     finally { setBusy(false); }
   };
   return (
     <Modal open onClose={onClose} title={initial.version ? `Tahrirlash: ${initial.id}` : 'Yangi savol'}>
       <div className="form">
-        {(q.image || q.scene || sign) && <div className="zoom"><QuestionMedia q={q} size={150} /></div>}
+        {(q.image || q.scene || q.art || sign) && <div className="zoom"><QuestionMedia q={q} size={150} /></div>}
         <div className="row-wrap">
           <button type="button" className="btn ghost small" onClick={() => fileRef.current?.click()}>🖼 Rasm yuklash</button>
           {q.image && <button type="button" className="btn ghost small" onClick={() => set({ image: undefined })}>Rasmni olib tashlash</button>}
@@ -475,15 +483,16 @@ function StatsTab() {
 
 // ---------- Xato xabarlari ----------
 
-function ReportsTab() {
+function ReportsTab({ onChange }: { onChange: () => void }) {
   const s = useStore((x) => x);
   const { data, error, reload } = useApi<{ reports: { id: number; qid: string; reason: string; comment: string; status: string; at: string; login: string | null }[] }>('/admin?action=reports');
   const [filter, setFilter] = useState<'new' | 'resolved' | ''>('new');
+  const [fix, setFix] = useState<{ q: Question; report: number } | null>(null);
   if (error) return <p className="bad-text">{error}</p>;
   if (!data) return <p className="muted">Yuklanmoqda…</p>;
   const byId = new Map(allQuestions(s).map((q) => [q.id, q]));
   const list = data.reports.filter((r) => !filter || r.status === filter);
-  const setStatus = async (id: number, status: string) => { await api('/admin?action=report-status', { body: { id, status }, admin: true }); reload(); };
+  const setStatus = async (id: number, status: string) => { await api('/admin?action=report-status', { body: { id, status }, admin: true }); reload(); onChange(); };
   return (
     <>
       <div className="chips">
@@ -492,11 +501,15 @@ function ReportsTab() {
       {list.length === 0 ? <Empty>Xabarlar yo'q</Empty> : list.map((r) => (
         <div key={r.id} className="review-item">
           <p><b>{r.reason}</b> · <span className="muted small">{fmtDate(r.at)} · {r.login ? '@' + r.login : 'mehmon'}</span></p>
-          <p className="small">{byId.get(r.qid)?.text ?? r.qid}</p>
+          <p className="small"><span className="mono muted">{r.qid}</span> · {byId.get(r.qid)?.text ?? "savol topilmadi (o'chirilgan bo'lishi mumkin)"}</p>
           {r.comment && <p className="muted small">“{r.comment}”</p>}
-          <button className="btn ghost small" onClick={() => setStatus(r.id, r.status === 'new' ? 'resolved' : 'new')}>{r.status === 'new' ? '✓ Hal qilindi' : 'Qayta ochish'}</button>
+          <div className="row-wrap">
+            {byId.get(r.qid) && <button className="btn small" onClick={() => setFix({ q: byId.get(r.qid)!, report: r.id })}>✏️ Savolni tuzatish</button>}
+            <button className="btn ghost small" onClick={() => setStatus(r.id, r.status === 'new' ? 'resolved' : 'new')}>{r.status === 'new' ? '✓ Hal qilindi' : 'Qayta ochish'}</button>
+          </div>
         </div>
       ))}
+      {fix && <QuestionEditor initial={fix.q} onClose={() => setFix(null)} onSaved={() => setStatus(fix.report, 'resolved')} />}
     </>
   );
 }
@@ -539,6 +552,212 @@ function SecurityTab() {
           <tr key={i}><td className="nowrap">{fmtDate(l.at)}</td><td className={l.ok ? 'good-text' : 'bad-text'}>{l.ok ? 'Kirdi' : "Noto'g'ri parol"}</td><td className="mono small">{l.ip || '—'}</td><td className="small">{device(l.agent)}</td></tr>
         ))}</tbody>
       </table>
+    </>
+  );
+}
+
+// ---------- Eng faol foydalanuvchilar ----------
+
+interface ActivityRow { id: number; login: string; name: string; last_seen: string | null; h1: number; d1: number; d7: number; d30: number; last_at: string; hours: number[] }
+
+function HourBars({ hours, mini }: { hours: number[]; mini?: boolean }) {
+  const max = Math.max(1, ...hours);
+  if (mini) return <span className="mini-hours" title={hours.map((n, h) => `${h}:00 — ${n}`).join('\n')}>{hours.map((n, h) => <i key={h} style={{ height: `${(n / max) * 100}%`, opacity: n ? 1 : 0.2 }} />)}</span>;
+  return (
+    <>
+      <div className="hours">{hours.map((n, h) => <div key={h} style={{ height: `${(n / max) * 100}%` }} title={`${h}:00–${h}:59 — ${n} ta kirish`} />)}</div>
+      <div className="hours-axis">{hours.map((_, h) => <span key={h}>{h % 3 === 0 ? h : ''}</span>)}</div>
+    </>
+  );
+}
+
+function ActivityTab() {
+  const { data, error, reload } = useApi<{ users: ActivityRow[]; hours: number[] }>('/admin?action=activity');
+  const [sort, setSort] = useState<'h1' | 'd1' | 'd7' | 'd30'>('d1');
+  if (error) return <p className="bad-text">{error}</p>;
+  if (!data) return <p className="muted">Yuklanmoqda…</p>;
+  const list = [...data.users].sort((a, b) => b[sort] - a[sort] || b.d30 - a.d30);
+  const peak = (h: number[]) => { const m = Math.max(...h); return m ? h.indexOf(m) : -1; };
+  const top = peak(data.hours);
+  return (
+    <>
+      <section className="panel">
+        <h3>Qaysi soatlarda kirishadi (oxirgi 30 kun, Toshkent vaqti)</h3>
+        <HourBars hours={data.hours} />
+        {top >= 0 && <p className="small">Eng gavjum vaqt: <b>{top}:00–{top}:59</b> ({data.hours[top]} ta kirish)</p>}
+      </section>
+      <div className="row-wrap">
+        <span className="small">Saralash:</span>
+        {([['h1', '1 soatda'], ['d1', '24 soatda'], ['d7', '7 kunda'], ['d30', '30 kunda']] as const).map(([k, l]) => <button key={k} className={'chip ' + (sort === k ? 'active' : '')} onClick={() => setSort(k)}>{l}</button>)}
+        <span className="grow" />
+        <button className="btn ghost" onClick={reload}>↻ Yangilash</button>
+      </div>
+      <p className="muted small">"Kirish" — parol bilan kirish yoki ilovani ochish (10 daqiqada ko'pi bilan bir marta hisoblanadi).</p>
+      {list.length === 0 ? <Empty>Oxirgi 30 kunda kirishlar yo'q</Empty> : (
+        <table className="table">
+          <thead><tr><th>#</th><th>Foydalanuvchi</th><th>1 soat</th><th>24 soat</th><th>7 kun</th><th>30 kun</th><th>Qaysi soatlarda</th><th>Oxirgi kirish</th></tr></thead>
+          <tbody>{list.map((u, i) => {
+            const p = peak(u.hours);
+            return (
+              <tr key={u.id}>
+                <td>{i + 1}</td>
+                <td><b>{u.name || '—'}</b><br /><span className="muted small">@{u.login}</span></td>
+                <td className={sort === 'h1' ? 'good-text' : ''}><b>{u.h1}</b></td>
+                <td className={sort === 'd1' ? 'good-text' : ''}><b>{u.d1}</b></td>
+                <td className={sort === 'd7' ? 'good-text' : ''}>{u.d7}</td>
+                <td className={sort === 'd30' ? 'good-text' : ''}>{u.d30}</td>
+                <td className="nowrap"><HourBars hours={u.hours} mini />{p >= 0 && <span className="small muted"> ko'pincha {p}:00</span>}</td>
+                <td className="nowrap small">{fmtDate(u.last_at)}</td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
+// ---------- Foydalanuvchilar yuborgan savollar ----------
+
+interface AdminSubmission {
+  id: number; status: 'pending' | 'approved' | 'rejected'; note: string; created_at: string; reviewed_at: string | null; login: string; name: string;
+  question: { text: string; options: string[]; correct: number; topic: string; explanation: string; image?: string };
+}
+
+function SubmissionsTab({ onChange }: { onChange: () => void }) {
+  const { data, error, reload } = useApi<{ submissions: AdminSubmission[] }>('/admin?action=submissions');
+  const [filter, setFilter] = useState<AdminSubmission['status'] | ''>('pending');
+  const [open, setOpen] = useState<AdminSubmission | null>(null);
+  if (error) return <p className="bad-text">{error}</p>;
+  if (!data) return <p className="muted">Yuklanmoqda…</p>;
+  const list = data.submissions.filter((x) => !filter || x.status === filter);
+  const LABEL = { pending: 'Tekshiruvda', approved: 'Tasdiqlangan', rejected: 'Rad etilgan' };
+  return (
+    <>
+      <p className="muted small">Foydalanuvchilar tuzgan savollar. Tasdiqlangan savol barcha foydalanuvchilarga chiqadi (id: u + raqam), muallif va admin izohi foydalanuvchiga ko'rinadi.</p>
+      <div className="chips">
+        {([['pending', 'Tekshiruvda'], ['approved', 'Tasdiqlangan'], ['rejected', 'Rad etilgan'], ['', 'Barchasi']] as const).map(([k, l]) => <button key={k} className={'chip ' + (filter === k ? 'active' : '')} onClick={() => setFilter(k)}>{l}</button>)}
+      </div>
+      {list.length === 0 ? <Empty>Savollar yo'q</Empty> : list.map((x) => (
+        <div key={x.id} className="review-item">
+          <div className="row-wrap"><span className={'status ' + (x.status === 'pending' ? 'review' : x.status === 'approved' ? 'published' : 'archived')}>{LABEL[x.status]}</span>
+            <span className="muted small">{fmtDate(x.created_at)} · {x.name} @{x.login} · {topicById(x.question.topic)?.name}</span></div>
+          <b>{x.question.text}</b>
+          {x.question.image && <div><img src={x.question.image} alt="" className="q-img" style={{ maxHeight: 120 }} /></div>}
+          <ol className="small">{x.question.options.map((o, i) => <li key={i} className={i === x.question.correct ? 'good-text' : ''}>{o}{i === x.question.correct && ' ✓'}</li>)}</ol>
+          {x.question.explanation && <p className="muted small">Izoh: {x.question.explanation}</p>}
+          {x.note && <p className="small"><b>Sizning izohingiz:</b> {x.note}</p>}
+          <button className="btn small" onClick={() => setOpen(x)}>Ko'rib chiqish</button>
+        </div>
+      ))}
+      {open && <ReviewModal sub={open} onClose={() => setOpen(null)} onDone={() => { setOpen(null); reload(); onChange(); loadContent(); }} />}
+    </>
+  );
+}
+
+function ReviewModal({ sub, onClose, onDone }: { sub: AdminSubmission; onClose: () => void; onDone: () => void }) {
+  const [q, setQ] = useState({ ...sub.question, options: [...sub.question.options] });
+  const [note, setNote] = useState(sub.note);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (patch: Partial<typeof q>) => setQ((p) => ({ ...p, ...patch }));
+  const review = async (status: 'approved' | 'rejected') => {
+    setBusy(true); setErr('');
+    try { await api('/admin?action=review-submission', { body: { id: sub.id, status, note, question: q }, admin: true }); onDone(); }
+    catch (e) { setErr(e instanceof Error ? e.message : 'Xatolik'); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title={`Savol #${sub.id} · @${sub.login}`}>
+      <div className="form">
+        <p className="muted small">Kerak bo'lsa matnni tuzating, keyin tasdiqlang yoki rad eting.</p>
+        <label>Savol matni<textarea rows={3} value={q.text} onChange={(e) => set({ text: e.target.value })} /></label>
+        {q.image && <div className="row-wrap"><img src={q.image} alt="" className="q-img" style={{ maxHeight: 140 }} /><button className="btn ghost small" onClick={() => set({ image: undefined })}>Rasmni olib tashlash</button></div>}
+        <fieldset>
+          <legend>Variantlar</legend>
+          {q.options.map((o, i) => (
+            <div key={i} className="opt-edit">
+              <input type="radio" name="sub-correct" checked={q.correct === i} onChange={() => set({ correct: i })} />
+              <input value={o} onChange={(e) => { const options = [...q.options]; options[i] = e.target.value; set({ options }); }} />
+            </div>
+          ))}
+        </fieldset>
+        <label>Mavzu<select value={q.topic} onChange={(e) => set({ topic: e.target.value })}>{TOPICS.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+        <label>Izoh<textarea rows={2} value={q.explanation} onChange={(e) => set({ explanation: e.target.value })} /></label>
+        <label>Muallifga izoh (ixtiyoriy)<textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Masalan: rahmat, savol qo'shildi / variantlar noaniq" /></label>
+        {err && <p className="bad-text small">{err}</p>}
+        <div className="row-end">
+          <button className="btn danger" disabled={busy} onClick={() => review('rejected')}>Rad etish</button>
+          <button className="btn" disabled={busy} onClick={() => review('approved')}>{sub.status === 'approved' ? 'Saqlash' : '✓ Tasdiqlash (hammaga chiqadi)'}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------- Chat-bot: tayyor javoblar va adminga kelgan savollar ----------
+
+interface AdminMessage { id: number; text: string; answer: string | null; created_at: string; answered_at: string | null; login: string; name: string }
+
+function ChatbotTab({ onChange }: { onChange: () => void }) {
+  const { data, error, reload } = useApi<{ messages: AdminMessage[] }>('/admin?action=messages');
+  const stored = useStore((s) => s.faq);
+  const [faq, setFaq] = useState<FaqItem[]>(() => stored?.length ? stored : DEFAULT_FAQ);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [msg, setMsg] = useState('');
+  const setItem = (i: number, patch: Partial<FaqItem>) => setFaq((f) => f.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const answer = async (m: AdminMessage, addToFaq: boolean) => {
+    const text = (answers[m.id] ?? m.answer ?? '').trim();
+    if (!text) return;
+    try {
+      await api('/admin?action=answer-message', { body: { id: m.id, answer: text }, admin: true });
+      if (addToFaq) setFaq((f) => [...f, { id: 'a' + m.id, keys: m.text.toLowerCase().slice(0, 80), answer: text }]);
+      reload(); onChange();
+    } catch (e) { alert(e instanceof Error ? e.message : 'Xatolik'); }
+  };
+  return (
+    <>
+      <section className="panel">
+        <h3>Foydalanuvchilar savollari</h3>
+        <p className="muted small">Bot javob topa olmagan savollar shu yerga keladi. Javobingiz foydalanuvchining chatida chiqadi.</p>
+        {error && <p className="bad-text">{error}</p>}
+        {!data ? <p className="muted">Yuklanmoqda…</p> : data.messages.length === 0 ? <p className="muted small">Hali savollar yo'q</p> : data.messages.map((m) => (
+          <div key={m.id} className="review-item">
+            <p className="small"><b>{m.name}</b> <span className="muted">@{m.login} · {fmtDate(m.created_at)}</span>{!m.answer && <span className="badge tab-badge">yangi</span>}</p>
+            <p>{m.text}</p>
+            <textarea rows={2} className="search" value={answers[m.id] ?? m.answer ?? ''} onChange={(e) => setAnswers((a) => ({ ...a, [m.id]: e.target.value }))} placeholder="Javobingiz…" />
+            <div className="row-wrap">
+              <button className="btn small" onClick={() => answer(m, false)}>{m.answer ? 'Javobni yangilash' : 'Javob berish'}</button>
+              <button className="btn ghost small" onClick={() => answer(m, true)}>Javob berish + tayyor javoblarga qo'shish</button>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="panel form">
+        <h3>Tayyor javoblar</h3>
+        <p className="muted small">Bot foydalanuvchi xabarida kalit so'zlardan birini topsa, shu javobni beradi. Kalit so'zlarni vergul bilan yozing. Maxsus: {'{exam}'} — imtihon formati, {'{progress}'} — foydalanuvchiga shaxsiy tavsiyalar. Havola: /quiz/mixed, /guide/signs va h.k.</p>
+        {faq.map((f, i) => (
+          <div key={f.id} className="review-item form">
+            <label>Kalit so'zlar<input value={f.keys} onChange={(e) => setItem(i, { keys: e.target.value })} /></label>
+            <label>Javob<textarea rows={2} value={f.answer} onChange={(e) => setItem(i, { answer: e.target.value })} /></label>
+            <div className="row-wrap">
+              <label className="grow">Havola (ixtiyoriy)<input value={f.link ?? ''} onChange={(e) => setItem(i, { link: e.target.value || undefined })} placeholder="/quiz/exam" /></label>
+              <label className="grow">Tugma matni<input value={f.linkText ?? ''} onChange={(e) => setItem(i, { linkText: e.target.value || undefined })} /></label>
+              <button className="btn danger small" onClick={() => setFaq((x) => x.filter((_, k) => k !== i))}>O'chirish</button>
+            </div>
+          </div>
+        ))}
+        <div className="row-wrap">
+          <button className="btn ghost" onClick={() => setFaq((x) => [...x, { id: 'f' + Date.now().toString(36), keys: '', answer: '' }])}>+ Javob qo'shish</button>
+          <button className="btn ghost" onClick={() => confirm("Standart javoblar tiklansinmi? O'zgarishlaringiz yo'qoladi.") && setFaq(DEFAULT_FAQ)}>Standartni tiklash</button>
+          <span className="grow" />
+          <button className="btn" onClick={async () => {
+            setMsg('');
+            try { await saveFaq(faq.filter((f) => f.keys.trim() && f.answer.trim())); setMsg('Saqlandi — barcha foydalanuvchilarga qo\'llanadi'); } catch (e) { setMsg(e instanceof Error ? e.message : 'Xatolik'); }
+          }}>Saqlash</button>
+        </div>
+        {msg && <p className="small">{msg}</p>}
+      </section>
     </>
   );
 }

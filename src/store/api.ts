@@ -2,6 +2,7 @@
 import { Capacitor } from '@capacitor/core';
 import type { Question } from '../data/types';
 import type { ExamConfig } from '../lib/exam';
+import type { FaqItem } from '../lib/chatbot';
 import { differs, mergeProgress } from '../lib/merge';
 import {
   getSession, getState, onProgressChange, PROGRESS_KEYS, setContent, setSession, setStateQuiet,
@@ -149,7 +150,7 @@ export function startSync() {
     pushTimer = setTimeout(pushProgress, 2500);
   });
   window.addEventListener('online', () => { syncNow(); loadContent(); });
-  document.addEventListener('visibilitychange', () => { document.visibilityState === 'hidden' ? pushProgress() : syncNow(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pushProgress(); else { refreshMe(); syncNow(); } });
   // Oflayn paytda yuborilmay qolgan natijalarni vaqti-vaqti bilan qayta urinib ko'ramiz
   setInterval(() => { if (navigator.onLine && getState().updatedAt > lastPushed) syncNow(); }, 60_000);
 }
@@ -158,8 +159,8 @@ export function startSync() {
 
 export async function loadContent() {
   try {
-    const r = await api<{ questions: Record<string, Question>; exam: ExamConfig | null }>('/content', { auth: false });
-    setContent(r.questions ?? {}, r.exam);
+    const r = await api<{ questions: Record<string, Question>; exam: ExamConfig | null; faq: FaqItem[] | null }>('/content', { auth: false });
+    setContent(r.questions ?? {}, r.exam, r.faq ?? null);
   } catch { /* oflayn — saqlangan kontent bilan ishlaymiz */ }
 }
 
@@ -176,3 +177,20 @@ export async function saveExamConfig(exam: ExamConfig) {
 export async function sendReport(r: { qid: string; reason: string; comment: string }) {
   await api('/content?action=report', { body: r });
 }
+
+export async function saveFaq(faq: FaqItem[]) {
+  await api('/content?action=faq', { method: 'PUT', body: { faq }, admin: true });
+  setContent(getState().customQuestions, null, faq);
+}
+
+// ---- Foydalanuvchi hissasi: savol yuborish va adminga savol ----
+
+export interface SubmittedQuestion { text: string; options: string[]; correct: number; topic: string; explanation: string; image?: string }
+export interface Submission { id: number; question: SubmittedQuestion; status: 'pending' | 'approved' | 'rejected'; note: string; created_at: string; reviewed_at: string | null }
+export interface ChatMessage { id: number; text: string; answer: string | null; created_at: string; answered_at: string | null; seen?: boolean }
+
+export const submitQuestion = (question: SubmittedQuestion) => api<{ ok: true; id: number }>('/community?action=submit', { body: { question } });
+export const mySubmissions = () => api<{ submissions: Submission[] }>('/community?action=submissions').then((r) => r.submissions);
+export const askAdmin = (text: string) => api<{ ok: true }>('/community?action=ask', { body: { text } });
+export const myMessages = () => api<{ messages: ChatMessage[] }>('/community?action=messages').then((r) => r.messages);
+export const unreadCount = () => api<{ unread: number }>('/community?action=unread').then((r) => r.unread);

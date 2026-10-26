@@ -1,5 +1,6 @@
 // Administrator: foydalanuvchilar, kirishlar tarixi, umumiy statistika, xato xabarlari.
 import { db, handler, HttpError, q, requireAdmin } from './_lib.js';
+import { cleanQuestion } from './community.js';
 
 interface Stat { correct: number; wrong: number; lastCorrect?: boolean; box: number }
 interface Attempt { mode: string; passed?: boolean; correct: number; total: number; finishedAt: number }
@@ -51,6 +52,25 @@ export default handler(async (req) => {
     return { logins: rows };
   }
 
+  if (req.method === 'GET' && action === 'activity') {
+    // Eng faol foydalanuvchilar: 1 soat / 24 soat / 7 kun / 30 kundagi kirishlar va qaysi soatlarda kirgani (Toshkent vaqti)
+    const rows = await s`
+      with l as (select user_id, at, extract(hour from at at time zone 'Asia/Tashkent')::int as h from logins where at > now() - interval '30 days')
+      select u.id, u.login, u.name, u.last_seen,
+        count(*) filter (where l.at > now() - interval '1 hour')::int as h1,
+        count(*) filter (where l.at > now() - interval '1 day')::int as d1,
+        count(*) filter (where l.at > now() - interval '7 days')::int as d7,
+        count(*)::int as d30,
+        max(l.at) as last_at,
+        array(select coalesce(sum(case when l2.h = g then 1 else 0 end), 0)::int from generate_series(0, 23) g
+              left join l l2 on l2.user_id = u.id and l2.h = g group by g order by g) as hours
+      from users u join l on l.user_id = u.id
+      group by u.id order by d1 desc, d7 desc, d30 desc limit 200`;
+    const [{ hours }] = await s`select array(select count(l.at)::int from generate_series(0, 23) g
+      left join logins l on extract(hour from l.at at time zone 'Asia/Tashkent')::int = g and l.at > now() - interval '30 days' group by g order by g) as hours`;
+    return { users: rows, hours };
+  }
+
   if (req.method === 'GET' && action === 'overview') {
     const [counts] = await s`
       select
@@ -59,7 +79,9 @@ export default handler(async (req) => {
         (select count(*)::int from users where last_seen > now() - interval '7 days') as active_week,
         (select count(*)::int from users where created_at > now() - interval '7 days') as new_week,
         (select count(*)::int from logins where at > now() - interval '1 day') as logins_day,
-        (select count(*)::int from reports where status = 'new') as reports_new`;
+        (select count(*)::int from reports where status = 'new') as reports_new,
+        (select count(*)::int from submissions where status = 'pending') as submissions_pending,
+        (select count(*)::int from messages where answer is null) as messages_new`;
     // Barcha foydalanuvchilar bo'yicha savollardagi xatolar
     const rows = await s<{ state: any }[]>`select state from progress`;
     const perQ: Record<string, { correct: number; wrong: number; users: number }> = {};
@@ -109,6 +131,48 @@ export default handler(async (req) => {
     const { id, status } = req.body ?? {};
     if (!['new', 'resolved'].includes(status)) throw new HttpError(400, "Noto'g'ri holat");
     await s`update reports set status = ${status} where id = ${id}`;
+    return { ok: true };
+  }
+
+  if (req.method === 'GET' && action === 'submissions') {
+    const rows = await s`select sb.id, sb.question, sb.status, sb.note, sb.created_at, sb.reviewed_at, u.login, u.name
+      from submissions sb join users u on u.id = sb.user_id order by (sb.status = 'pending') desc, sb.created_at desc limit 300`;
+    return { submissions: rows };
+  }
+
+  if (req.method === 'POST' && action === 'review-submission') {
+    const { id, status, note } = req.body ?? {};
+    if (!['approved', 'rejected', 'pending'].includes(status)) throw new HttpError(400, "Noto'g'ri holat");
+    const [sub] = await s`select sb.*, u.login from submissions sb join users u on u.id = sb.user_id where sb.id = ${id}`;
+    if (!sub) throw new HttpError(404, 'Topilmadi');
+    // Admin tahrirlagan variant bo'lsa, shuni olamiz
+    const question = req.body?.question ? cleanQuestion(req.body.question) : sub.question;
+    await s.begin(async (t: any) => {
+      await t`update submissions set status = ${status}, note = ${String(note ?? '').slice(0, 500)}, question = ${t.json(question)}, reviewed_at = now() where id = ${id}`;
+      const [row] = await t`select value from settings where key = 'questions' for update`;
+      const all = { ...(row?.value ?? {}) };
+      const qid = 'u' + id;
+      if (status === 'approved') {
+        all[qid] = { ...question, id: qid, status: 'published', version: (all[qid]?.version ?? 0) + 1, difficulty: 2, author: sub.login, updatedAt: new Date().toISOString() };
+      } else if (all[qid]) {
+        all[qid] = { ...all[qid], status: 'archived' };
+      }
+      await t`insert into settings (key, value) values ('questions', ${t.json(all)}) on conflict (key) do update set value = excluded.value, updated_at = now()`;
+    });
+    return { ok: true };
+  }
+
+  if (req.method === 'GET' && action === 'messages') {
+    const rows = await s`select m.id, m.text, m.answer, m.created_at, m.answered_at, u.login, u.name
+      from messages m join users u on u.id = m.user_id order by (m.answer is null) desc, m.created_at desc limit 300`;
+    return { messages: rows };
+  }
+
+  if (req.method === 'POST' && action === 'answer-message') {
+    const { id, answer } = req.body ?? {};
+    const text = String(answer ?? '').trim().slice(0, 2000);
+    if (!text) throw new HttpError(400, "Javob bo'sh");
+    await s`update messages set answer = ${text}, answered_at = now(), seen = false where id = ${id}`;
     return { ok: true };
   }
 

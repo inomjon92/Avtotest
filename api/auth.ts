@@ -20,6 +20,10 @@ export default handler(async (req) => {
 
   if (req.method === 'GET' && action === 'me') {
     const u = await currentUser(req);
+    // Ilovani ochish ham "kirish" sifatida yoziladi (10 daqiqada ko'pi bilan bir marta)
+    await s`insert into logins (user_id, kind, agent, ip)
+      select ${u.id}, 'open', ${agent}, ${ip}
+      where not exists (select 1 from logins where user_id = ${u.id} and at > now() - interval '10 minutes')`;
     return { user: publicUser(u) };
   }
   if (req.method !== 'POST') throw new HttpError(405, "Noto'g'ri so'rov");

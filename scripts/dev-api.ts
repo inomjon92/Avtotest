@@ -8,6 +8,7 @@ const routes: Record<string, () => Promise<{ default: (req: Req, res: Res) => Pr
   progress: () => import('../api/progress.js'),
   content: () => import('../api/content.js'),
   admin: () => import('../api/admin.js'),
+  community: () => import('../api/community.js'),
 };
 
 async function readBody(req: IncomingMessage) {

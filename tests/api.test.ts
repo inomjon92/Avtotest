@@ -27,7 +27,7 @@ describe.skipIf(!enabled)('server API', () => {
     server = await startApiServer(PORT);
     const { default: postgres } = await import('postgres');
     const sql = postgres(process.env.DATABASE_URL!, { onnotice: () => {} });
-    await sql`drop table if exists logins, progress, settings, reports, auth_failures, admin_logins, users cascade`;
+    await sql`drop table if exists logins, progress, settings, reports, auth_failures, admin_logins, submissions, messages, users cascade`;
     await sql.end();
   });
   afterAll(() => new Promise<void>((r) => server.close(() => r())));
@@ -109,6 +109,50 @@ describe.skipIf(!enabled)('server API', () => {
     for (let i = 0; i < 5; i++) expect((await call('/auth?action=login', { body: { login: 'ali' + suffix, password: 'notogri1' }, ip: '10.7.7.7' })).status).toBe(401);
     expect((await call('/auth?action=login', { body: { login: 'ali' + suffix, password: 'secret12' }, ip: '10.7.7.7' })).status).toBe(429);
     expect((await call('/auth?action=login', { body: { login: 'ali' + suffix, password: 'secret12' }, ip: '10.0.0.2' })).status).toBe(200);
+  });
+
+  it("foydalanuvchi savol yuboradi, admin tasdiqlasa hammaga chiqadi", async () => {
+    const question = { text: "Qor yog'ayotganda nima qilish kerak?", options: ['Sekinlash', 'Tezlashish'], correct: 0, topic: 'xavfsizlik', explanation: 'Tormoz yo\'li uzayadi' };
+    expect((await call('/community?action=submit', { body: { question } })).status).toBe(401);
+    expect((await call('/community?action=submit', { body: { question: { ...question, text: 'qisqa' } }, token: userToken })).status).toBe(400);
+    const r = await call('/community?action=submit', { body: { question }, token: userToken });
+    expect(r.status).toBe(200);
+    expect((await call('/admin?action=overview', { token: adminToken })).data.counts.submissions_pending).toBe(1);
+    const subs = (await call('/admin?action=submissions', { token: adminToken })).data.submissions;
+    expect(subs[0].login).toBe('ali' + suffix);
+    expect((await call('/admin?action=review-submission', { body: { id: r.data.id, status: 'approved', note: 'Rahmat' }, token: adminToken })).status).toBe(200);
+    const content = (await call('/content')).data.questions;
+    expect(content['u' + r.data.id]).toMatchObject({ text: question.text, status: 'published', author: 'ali' + suffix });
+    expect(content.n1).toBeTruthy();
+    const mine = (await call('/community?action=submissions', { token: userToken })).data.submissions;
+    expect(mine[0]).toMatchObject({ status: 'approved', note: 'Rahmat' });
+  });
+
+  it('chat-bot savoli adminga boradi, javob foydalanuvchiga qaytadi', async () => {
+    expect((await call('/community?action=ask', { body: { text: 'Guvohnoma qachon beriladi?' }, token: userToken })).status).toBe(200);
+    expect((await call('/admin?action=overview', { token: adminToken })).data.counts.messages_new).toBe(1);
+    const m = (await call('/admin?action=messages', { token: adminToken })).data.messages[0];
+    await call('/admin?action=answer-message', { body: { id: m.id, answer: '10 kun ichida' }, token: adminToken });
+    expect((await call('/community?action=unread', { token: userToken })).data.unread).toBe(1);
+    expect((await call('/community?action=messages', { token: userToken })).data.messages[0].answer).toBe('10 kun ichida');
+    expect((await call('/community?action=unread', { token: userToken })).data.unread).toBe(0);
+  });
+
+  it('admin chat-bot javoblarini tahrirlaydi', async () => {
+    const faq = [{ id: 'x', keys: 'salom', answer: 'Salom!' }];
+    expect((await call('/content?action=faq', { method: 'PUT', body: { faq }, token: userToken })).status).toBe(401);
+    expect((await call('/content?action=faq', { method: 'PUT', body: { faq }, token: adminToken })).status).toBe(200);
+    expect((await call('/content')).data.faq).toEqual(faq);
+  });
+
+  it("eng faol foydalanuvchilar ro'yxati", async () => {
+    const r = await call('/admin?action=activity', { token: adminToken });
+    expect(r.status).toBe(200);
+    expect(r.data.hours).toHaveLength(24);
+    const ali = r.data.users.find((u: any) => u.login === 'ali' + suffix);
+    expect(ali.h1).toBeGreaterThanOrEqual(2);
+    expect(ali.d1).toBe(ali.h1);
+    expect(ali.hours.reduce((a: number, b: number) => a + b, 0)).toBe(ali.d30);
   });
 
   it('bloklangan foydalanuvchi kira olmaydi', async () => {

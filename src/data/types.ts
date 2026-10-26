@@ -24,6 +24,8 @@ export interface Question {
   status: QuestionStatus;
   version: number;
   updatedAt?: string;
+  /** Foydalanuvchi yuborgan savol bo'lsa, uning logini */
+  author?: string;
 }
 
 export interface Topic {

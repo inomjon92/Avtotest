@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { advice, topicScores } from '../lib/analysis';
+import { topicById } from '../data/topics';
+import { unreadCount } from '../store/api';
 import { Card, PageHeader, Progress, toneFor } from '../components/ui';
 import { EXAM_TIPS } from '../data/extra';
 import { buildTickets, readinessIndex } from '../lib/exam';
@@ -41,6 +45,11 @@ export default function Home() {
     return qs.length > 0 && qs.every((q) => s.stats[q.id]?.lastCorrect);
   }).length;
   const last = s.attempts[s.attempts.length - 1];
+  const tips = advice(topicScores(pool, s.stats), {
+    readiness, examsTaken: exams.length, mistakes, rulesRead: rulesDone, rulesTotal: RULES.length, topicName: (id) => tc(topicById(id)?.name ?? id),
+  });
+  const [unread, setUnread] = useState(0);
+  useEffect(() => { if (session) unreadCount().then(setUnread).catch(() => {}); }, [session]);
 
   return (
     <div className="page">
@@ -78,6 +87,21 @@ export default function Home() {
         </div>
       </section>
 
+      {tips.length > 0 && (
+        <section className="panel">
+          <h3>🧭 {t('Siz uchun tavsiyalar')}</h3>
+          <div className="advice">
+            {tips.map((a, i) => (
+              <div key={i} className="advice-item">
+                <span className="card-icon">{a.icon}</span>
+                <span className="grow small">{a.text}</span>
+                {a.to && <Link className="btn ghost small" to={a.to}>{a.action ?? 'Ochish'}</Link>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {examDay && (
         <section className="notice">
           <b>🗓 {t('Imtihon kuni rejimi')}</b>
@@ -101,6 +125,8 @@ export default function Home() {
         <Card to="/quiz/marathon" icon="🏃" title={t('Marafon')} subtitle={s.marathon.index ? `${s.marathon.index + 1}-savoldan davom` : undefined} />
         <Card to="/guide/signs" icon="⚠️" title={t("Yo'l belgilari")} />
         <Card to="/guide" icon="📖" title={t("Yo'riqnoma")} />
+        <Card to="/chat" icon="💬" title={t('Yordamchi')} subtitle={t('Savolingizga javob')} badge={unread || undefined} />
+        <Card to="/submit" icon="✍️" title={t('Savol yuborish')} subtitle={t("O'z savolingizni qo'shing")} />
       </div>
 
       {daysLeft !== null && daysLeft > 1 && (

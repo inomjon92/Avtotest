@@ -9,6 +9,8 @@ import Admin from './pages/Admin';
 import Gallery from './pages/Gallery';
 import { Documents, Fines, GuideHome, RuleDetail, RulesList, SignsCatalog, Tips } from './pages/Guide';
 import Login from './pages/Login';
+import Chat from './pages/Chat';
+import Submit from './pages/Submit';
 import { useGuest, useSession, useStore } from './store/store';
 import { loadContent, refreshMe, startSync, syncNow } from './store/api';
 import { useT } from './store/i18n';
@@ -35,7 +37,7 @@ function ScrollTop() {
 function BottomNav() {
   const { t } = useT();
   const { pathname } = useLocation();
-  if (pathname.startsWith('/quiz')) return null;
+  if (pathname.startsWith('/quiz') || pathname.startsWith('/admin')) return null;
   const items: [string, string, string][] = [
     ['/', '🏠', 'Bosh sahifa'], ['/tests', '📝', 'Testlar'], ['/guide', '📖', "Yo'riqnoma"], ['/stats', '📊', 'Statistika'], ['/settings', '⚙️', 'Sozlamalar'],
   ];
@@ -70,7 +72,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollTop />
-      <main className="app">
+      <AppMain>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/tests" element={<Tests />} />
@@ -84,14 +86,22 @@ export default function App() {
           <Route path="/guide/tips" element={<Tips />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/chat" element={<Chat />} />
+          <Route path="/submit" element={<Submit />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/rasmlar" element={<Gallery />} />
           <Route path="*" element={<Home />} />
         </Routes>
-      </main>
+      </AppMain>
       <BottomNav />
     </BrowserRouter>
   );
+}
+
+// Admin panel foydalanuvchi menyusisiz, kengroq maketda ochiladi
+function AppMain({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  return <main className={pathname.startsWith('/admin') ? 'app admin-app' : 'app'}>{children}</main>;
 }
 
 // Bir testdan boshqasiga o'tganda holat yangidan boshlanishi uchun

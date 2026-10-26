@@ -227,3 +227,28 @@ h4 { margin: 8px 0 4px; }
 .gallery-grid.wide { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .gallery-grid figure { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px; font-size: .8rem; }
 .gallery-grid figure .road-sign { display: block; margin: 0 auto; }
+.app.admin-app { max-width: 1100px; padding-bottom: 24px; }
+
+/* Tavsiyalar */
+.advice { display: grid; gap: 8px; }
+.advice-item { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); }
+.advice-item:first-child { border-top: 0; }
+
+/* Chat-bot */
+.chat-log { display: grid; gap: 8px; margin: 10px 0; }
+.bubble { max-width: 85%; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); justify-self: start; }
+.bubble.me { justify-self: end; background: var(--primary); color: var(--primary-text); border-color: transparent; margin-left: auto; }
+.bubble.admin { background: var(--warn-bg); }
+.chat-log > div > .bubble { margin: 4px 0; }
+.chat-links { margin: 8px 0 0; }
+.pre { white-space: pre-line; }
+.chat-input { display: flex; gap: 8px; position: sticky; bottom: calc(70px + env(safe-area-inset-bottom)); background: var(--bg); padding: 8px 0; }
+.chat-input input { flex: 1; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+
+/* Admin: faollik */
+.hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; height: 70px; }
+.hours > div { background: var(--primary); border-radius: 3px 3px 0 0; min-height: 2px; }
+.hours-axis { display: grid; grid-template-columns: repeat(24, 1fr); font-size: .65rem; color: var(--muted); text-align: center; }
+.mini-hours { display: inline-grid; grid-template-columns: repeat(24, 4px); gap: 1px; align-items: end; height: 22px; vertical-align: middle; }
+.mini-hours > i { background: var(--primary); min-height: 1px; display: block; }
+.tab-badge { margin-left: 4px; }
