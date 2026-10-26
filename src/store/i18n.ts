@@ -23,6 +23,12 @@ const RU: Record<string, string> = {
   'Shaxsiy o\'quv reja': 'Личный план', 'Takrorlash kerak': 'К повторению', "Javob berilgan": 'Отвечено', 'Qolgan vaqt': 'Осталось',
   'Ruxsat etilgan xato': 'Допустимо ошибок', 'Imtihon kuni rejimi': 'Режим дня экзамена', 'Belgi': 'Знак', 'Jarima': 'Штраф',
   'Salom': 'Привет', 'Imtihongacha': 'До экзамена', 'Har kuni kamida': 'Решайте каждый день не менее', 'ta savol ishlang': 'вопросов', 'Maslahat': 'Совет',
+  'Kirish': 'Вход', "Ro'yxatdan o'tish": 'Регистрация', "Ro'yxatdan o'ting": 'Зарегистрируйтесь', 'Login': 'Логин', 'Parol': 'Пароль',
+  'Parolni takrorlang': 'Повторите пароль', 'Meni eslab qol': 'Запомнить меня', 'Mehmon sifatida davom etish': 'Продолжить как гость', 'Chiqish': 'Выйти',
+  "O'tilganlar": 'Пройдено', 'Darslar': 'Уроки', 'Oxirgi test': 'Последний тест', 'Qayta ishlash': 'Пройти снова', 'Keyingi dars': 'Следующий урок',
+  'Keyingi bilet': 'Следующий билет', 'Xatolar': 'Ошибки', "O'qilgan bo'limlar": 'Прочитанные разделы', "Bo'lim o'qilgan deb belgilandi": 'Раздел отмечен как прочитанный',
+  'Qiyin savollar': 'Сложные вопросы', 'Murakkab vaziyatlar va xatolaringiz': 'Сложные ситуации и ваши ошибки', "o'tilgan": 'пройдено',
+  'Javoblar tahlili': 'Разбор ответов', 'Sizning javobingiz': 'Ваш ответ', "To'g'ri javob": 'Правильный ответ', 'Javob berilmagan': 'Нет ответа',
   'Kontent tili': 'Язык контента', 'Natijalar': 'Результаты', "Barchasi": 'Все', 'Yangi': 'Новые', 'Hal qilindi': 'Решено',
 };
 

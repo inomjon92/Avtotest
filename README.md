@@ -23,8 +23,14 @@ B toifali haydovchilik guvohnomasi nazariy imtihoniga tayyorlanish uchun veb-ilo
 - Umumiy progress, zaif mavzular xaritasi, imtihonlar tarixi, tayyorlik indeksi (oxirgi 10 simulyatsiya)
 - Kunlik seriya, 28 kunlik faollik, yutuqlar, imtihon sanasi bo'yicha shaxsiy kunlik reja, imtihon kuni rejimi
 
-**Admin panel** (`/admin`, standart PIN `1234`)
-- Savollar CRUD, holatlar: qoralama → tekshiruvda → nashr qilingan → arxiv, versiyalar tarixi va tiklash
+**Hisob va sinxronlash**
+- Ilova ochilganda kirish / ro'yxatdan o'tish oynasi; "Meni eslab qol" bilan keyingi safar avtomatik kirish (180 kunlik token, parol saqlanmaydi)
+- Progress serverda saqlanadi va qurilmalar o'rtasida sinxronlanadi
+- O'tilgan darslar, biletlar va mavzular belgilanadi; test oxirida javoblar tahlili
+
+**Admin panel** (`/admin`, login va parol Vercel env'dan)
+- Foydalanuvchilar ro'yxati (IP manzil, qurilma, progress), kirishlar tarixi, bloklash/o'chirish, admin kirishlari jurnali
+- Savollar CRUD, rasm yuklash, holatlar: qoralama → tekshiruvda → nashr qilingan → arxiv, versiyalar tarixi va tiklash
 - CSV import/eksport (Excel "CSV UTF-8", `,` yoki `;`), savollar bo'yicha xato statistikasi, xato xabarlari
 - Imtihon formatini sozlash
 
@@ -39,12 +45,28 @@ npm test           # unit testlar
 npm run build      # dist/ papkaga
 ```
 
+Server bilan lokal ishlatish (Postgres kerak):
+
+```bash
+DATABASE_URL=postgres://... ADMIN_LOGIN=boshliq ADMIN_PASSWORD='kuchli-parol' npm run dev:api   # :3001
+npm run dev        # /api so'rovlari :3001 ga yo'naltiriladi
+```
+
 ## Vercel'ga joylash
 
-1. [vercel.com/new](https://vercel.com/new) → GitHub'dagi `Avtotest` reposini tanlang.
-2. Framework avtomatik "Vite" aniqlanadi (`vercel.json` tayyor). **Deploy** tugmasini bosing.
+1. [vercel.com/new](https://vercel.com/new) → GitHub'dagi `Avtotest` reposini tanlang → **Deploy**.
+2. Loyiha → **Storage** → **Create Database** → *Neon (Postgres)* → loyihaga ulang (`DATABASE_URL` avtomatik qo'shiladi).
+3. **Settings → Environment Variables**:
+   - `ADMIN_LOGIN` — admin login (masalan `boshliq`)
+   - `ADMIN_PASSWORD` — kamida 8 belgi, kuchli parol
+   - `AUTH_SECRET` — uzun tasodifiy satr (tokenlarni imzolash uchun)
+4. **Deployments → Redeploy**. Jadvallar birinchi so'rovda avtomatik yaratiladi.
+
+Xavfsizlik: parollar scrypt bilan xeshlanadi, tokenlar HMAC bilan imzolanadi, 15 daqiqada 5 ta noto'g'ri urinishdan keyin bloklanadi, admin sessiyasi 12 soat.
 
 ## Android APK
+
+Ilova serverga ulanishi uchun repo → *Settings → Secrets and variables → Actions → Variables* bo'limida `API_URL` = Vercel manzilingiz (masalan `https://avtotest.vercel.app`) qo'shing.
 
 **Avtomatik (tavsiya):** `main` ga har push'da GitHub Actions APK yig'adi. Telefondan yuklab olish: repo → *Releases* → **Avtotest APK (oxirgi versiya)** → `avtotest.apk`. Yoki *Actions* → oxirgi ish → *Artifacts*.
 
@@ -63,15 +85,17 @@ Play Market uchun imzolangan `release` APK/AAB kerak bo'ladi (keystore bilan `./
 ## Tuzilma
 
 ```
+api/          Vercel serverless funksiyalar (auth, progress, content, admin) va Postgres
+scripts/      lokal API server
 src/
   data/       savollar, mavzular, YHQ bayoni, belgilar, jarimalar
   lib/        imtihon qoidalari, aqlli takrorlash, CSV, kirill transliteratsiya
   store/      lokal holat (localStorage) va tarjimalar
   components/ yo'l belgisi SVG, umumiy UI
   pages/      sahifalar
-tests/        unit testlar (Vitest)
+tests/        unit va API testlar (Vitest; API testlari DATABASE_URL bilan)
 ```
 
 ## Keyingi bosqich (TZ bo'yicha)
 
-Hozirgi versiya serversiz ishlaydi: barcha ma'lumot qurilmada saqlanadi. TZ ning qolgan qismlari backend talab qiladi: SMS/Telegram orqali ro'yxatdan o'tish, qurilmalar o'rtasida sinxronlash, obuna va to'lovlar (Click, Payme, Uzum), avtomaktab kabineti, server tomonidagi rollar va 2FA, push-xabarlar, Telegram bot, rus/qoraqalpoq tilidagi savollar bazasi.
+TZ ning qolgan qismlari: SMS/Telegram orqali ro'yxatdan o'tish, obuna va to'lovlar (Click, Payme, Uzum), avtomaktab kabineti, server tomonidagi rollar va 2FA, push-xabarlar, Telegram bot, rus/qoraqalpoq tilidagi savollar bazasi.

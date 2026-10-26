@@ -7,7 +7,9 @@ import Stats from './pages/Stats';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import { Documents, Fines, GuideHome, RuleDetail, RulesList, SignsCatalog, Tips } from './pages/Guide';
-import { useStore } from './store/store';
+import Login from './pages/Login';
+import { useGuest, useSession, useStore } from './store/store';
+import { loadContent, pullProgress, refreshMe, startSync } from './store/api';
 import { useT } from './store/i18n';
 
 function useAppearance() {
@@ -47,8 +49,23 @@ function BottomNav() {
   );
 }
 
+let started = false;
+function useBoot() {
+  useEffect(() => {
+    if (started) return;
+    started = true;
+    startSync();
+    loadContent();
+    refreshMe().then(() => pullProgress().catch(() => {}));
+  }, []);
+}
+
 export default function App() {
   useAppearance();
+  useBoot();
+  const session = useSession();
+  const guest = useGuest();
+  if (!session && !guest && !location.pathname.startsWith('/admin')) return <main className="app"><Login /></main>;
   return (
     <BrowserRouter>
       <ScrollTop />

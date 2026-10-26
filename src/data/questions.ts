@@ -1,4 +1,6 @@
 import type { Question } from './types';
+import { RAW2, RAW_SCENES } from './questions2';
+import { SCENES } from './scenes';
 
 // Namunaviy savollar bazasi. Rasmiy biletlar emas: rasmiy baza admin paneldan CSV orqali import qilinadi.
 // Mualliflik qulayligi uchun to'g'ri javob har doim birinchi yoziladi; ilova variantlarni aralashtiradi.
@@ -217,10 +219,17 @@ const RAW: Raw[] = [
     "Uchburchakli \"Piyodalar o'tish joyi\" ogohlantiruvchi belgisi o'tish joyidan oldinroq o'rnatiladi; ko'k kvadratli belgi esa o'tish joyining o'zida."],
 ];
 
-export const BASE_QUESTIONS: Question[] = RAW.map(([id, topic, rule, sign, text, options, explanation]) => ({
+const toQuestion = ([id, topic, rule, sign, text, options, explanation]: Raw, difficulty: 1 | 2 | 3): Question => ({
   id, topic, text, options, correct: 0, explanation,
   rule: rule || undefined,
   sign: sign || undefined,
+  scene: SCENES[id],
+  difficulty,
   status: 'published',
   version: 1,
-}));
+});
+
+export const BASE_QUESTIONS: Question[] = [
+  ...RAW.map((r) => toQuestion(r, 1)),
+  ...[...RAW2, ...RAW_SCENES].map(([id, topic, rule, sign, text, options, explanation, d]) => toQuestion([id, topic, rule, sign, text, options, explanation], d)),
+];

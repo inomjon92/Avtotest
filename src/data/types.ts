@@ -15,6 +15,10 @@ export interface Question {
   /** Yo'l belgisi kodi (signs.ts dagi id) yoki rasm URL */
   sign?: string;
   image?: string;
+  /** Vaziyat chizmasi (chorraha, yo'l) */
+  scene?: SceneSpec;
+  /** 1 — oson, 2 — o'rta, 3 — qiyin */
+  difficulty?: 1 | 2 | 3;
   status: QuestionStatus;
   version: number;
   updatedAt?: string;
@@ -58,4 +62,34 @@ export interface RoadSign {
   symbol?: string;
   /** Taqiqlovchi belgilarda diagonal chiziq */
   slash?: boolean;
+}
+
+export type Dir = 'n' | 's' | 'e' | 'w';
+
+export interface SceneCar {
+  /** Qaysi tomondan kelmoqda (s — pastdan yuqoriga) */
+  from: Dir;
+  turn?: 'straight' | 'left' | 'right' | 'uturn' | 'stop';
+  label?: string;
+  you?: boolean;
+  kind?: 'car' | 'tram' | 'bus' | 'truck' | 'police';
+  /** To'g'ri yo'l sahnasida: qator (0 — o'ng chekka) va chorrahagacha masofa */
+  lane?: number;
+  pos?: number;
+}
+
+export interface SceneSpec {
+  kind: 'cross' | 'tee' | 'straight' | 'rail' | 'roundabout';
+  signs?: { at: Dir; id: string }[];
+  light?: { at: Dir; color: 'red' | 'yellow' | 'green' | 'flash' | 'redyellow'; arrow?: 'left' | 'right' };
+  cars?: SceneCar[];
+  peds?: Dir[];
+  zebra?: Dir[];
+  regulator?: { pose: 'side' | 'forward' | 'up'; facing: Dir };
+  rails?: 'ns' | 'ew';
+  dirt?: Dir[];
+  barrier?: 'closed' | 'open';
+  /** To'g'ri yo'l: har yo'nalishdagi qatorlar soni va o'rta chiziq */
+  lanes?: 1 | 2;
+  marking?: 'solid' | 'dashed' | 'double' | 'solid-dashed';
 }

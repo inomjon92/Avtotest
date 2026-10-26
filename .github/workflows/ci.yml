@@ -12,6 +12,17 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: avtotest
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/avtotest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,6 +48,9 @@ jobs:
           java-version: 21
       - run: npm ci
       - run: npm run build
+        env:
+          # Ilova serverga ulanishi uchun: Settings → Variables → API_URL (masalan https://avtotest.vercel.app)
+          VITE_API_URL: ${{ vars.API_URL }}
       - name: Android loyihasini yaratish
         run: |
           npx cap add android

@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import type { Question } from '../data/types';
 import { signById } from '../data/signs';
 import { ruleById } from '../data/rules';
 import { topicById } from '../data/topics';
 import { RoadSign } from '../components/RoadSign';
+import { Scene } from '../components/Scene';
 import { Modal, PageHeader, Empty } from '../components/ui';
 import { buildTickets, examOutcome, pickExamQuestions } from '../lib/exam';
 import { hashString, seeded, shuffle } from '../lib/random';
 import { isDue } from '../lib/srs';
 import {
-  addReport, getState, publishedQuestions, recordAnswer, saveAttempt, setMarathon, toggleFavorite, useStore,
+  addLocalReport, getState, publishedQuestions, recordAnswer, saveAttempt, setMarathon, toggleFavorite, useStore,
   type AppState, type Attempt, type Mode,
 } from '../store/store';
 import { useT } from '../store/i18n';
+import { sendReport } from '../store/api';
 
 interface QuizSpec { title: string; questions: Question[]; mode: Mode }
 
@@ -40,6 +42,11 @@ export function resolveQuiz(s: AppState, mode: Mode, param?: string): QuizSpec {
       const fresh = pool.filter((q) => !s.stats[q.id]);
       return { mode, title: 'Aqlli takrorlash', questions: [...due, ...fresh].slice(0, Math.max(10, s.settings.dailyGoal)) };
     }
+    case 'hard': {
+      const rate = (id: string) => { const st = s.stats[id]; return st ? st.wrong / Math.max(1, st.correct + st.wrong) : 0; };
+      const hard = pool.filter((q) => (q.difficulty ?? 1) >= 3 || rate(q.id) >= 0.5);
+      return { mode, title: 'Qiyin savollar', questions: shuffle(hard).slice(0, 30) };
+    }
     default:
       return { mode, title: 'Test', questions: [] };
   }
@@ -49,6 +56,7 @@ const REPORT_REASONS = ["Javob noto'g'ri", "Savol matnida xato", 'Izoh tushunars
 
 export default function Quiz() {
   const { mode = 'exam', param } = useParams();
+  const { pathname } = useLocation();
   const { t, tc, lang } = useT();
   const cfg = useStore((s) => s.exam);
   const favorites = useStore((s) => s.favorites);
@@ -86,14 +94,14 @@ export default function Quiz() {
     const outcome = examOutcome(answered.length, errs, qs.length, cfg, timeUp || isExam);
     const a: Attempt = {
       id: 'a' + Date.now().toString(36), mode: spec.mode, title: spec.title,
-      startedAt: startedAt.current, finishedAt: Date.now(), total: qs.length, answered: answered.length, correct, errors: errs,
+      path: pathname, startedAt: startedAt.current, finishedAt: Date.now(), total: qs.length, answered: answered.length, correct, errors: errs,
       passed: spec.mode === 'exam' || spec.mode === 'ticket' ? outcome === 'passed' : undefined,
       answers: answered.map((x) => ({ qid: x.id, chosen: answers[x.id], correct: answers[x.id] === x.correct, ms: times[x.id] ?? 0 })),
     };
     if (answered.length > 0) saveAttempt(a);
     if (spec.mode === 'marathon') setMarathon({ index: 0, answers: {} });
     setFinished(a);
-  }, [spec, answers, times, cfg, isExam]);
+  }, [spec, answers, times, cfg, isExam, pathname]);
 
   // Taymer (faqat imtihonda)
   useEffect(() => {
@@ -193,9 +201,7 @@ export default function Quiz() {
 
       <article className="question">
         <div className="q-media">
-          {sign ? <button className="sign-btn" onClick={() => setZoom(true)} aria-label="Kattalashtirish"><RoadSign sign={sign} size={140} /></button>
-            : q.image ? <button className="sign-btn" onClick={() => setZoom(true)}><img src={q.image} alt="" className="q-img" /></button>
-            : <div className="q-placeholder">{topicById(q.topic)?.icon ?? '🚗'}</div>}
+          <button className="sign-btn" onClick={() => setZoom(true)} aria-label="Kattalashtirish"><QuestionMedia q={q} size={150} /></button>
         </div>
         <div className="q-meta">
           <span>{t('Savol')} {index + 1} / {spec.questions.length}</span>
@@ -240,9 +246,9 @@ export default function Quiz() {
           : <button className="btn" onClick={next} disabled={!answered && isExam}>{t('Keyingi')} →</button>}
       </div>
 
-      <Modal open={zoom} onClose={() => setZoom(false)} title={sign ? `${sign.code} ${tc(sign.name)}` : ''}>
-        <div className="zoom">{sign ? <RoadSign sign={sign} size={300} /> : q.image && <img src={q.image} alt="" style={{ maxWidth: '100%' }} />}</div>
-        {sign && <p>{tc(sign.description)}</p>}
+      <Modal open={zoom} onClose={() => setZoom(false)} title={sign && !q.scene ? `${sign.code} ${tc(sign.name)}` : tc(q.text)}>
+        <div className="zoom"><QuestionMedia q={q} size={320} /></div>
+        {sign && <p>{sign.code} {tc(sign.name)}: {tc(sign.description)}</p>}
       </Modal>
       <ReportModal open={report} onClose={() => setReport(false)} qid={q.id} />
     </div>
@@ -258,7 +264,11 @@ function ReportModal({ open, onClose, qid }: { open: boolean; onClose: () => voi
   return (
     <Modal open={open} onClose={onClose} title={t('Xato haqida xabar berish')}>
       {sent ? <p>Rahmat! Xabaringiz moderatorga yuborildi.</p> : (
-        <form onSubmit={(e) => { e.preventDefault(); addReport({ qid, reason, comment }); setSent(true); }}>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          try { await sendReport({ qid, reason, comment }); } catch { addLocalReport({ qid, reason, comment }); }
+          setSent(true);
+        }}>
           <div className="radio-list">
             {REPORT_REASONS.map((r) => <label key={r}><input type="radio" name="reason" checked={reason === r} onChange={() => setReason(r)} /> {r}</label>)}
           </div>
@@ -274,6 +284,8 @@ function Result({ attempt, questions, answers, isExam, onRestart }: { attempt: A
   const { t, tc } = useT();
   const cfg = useStore((s) => s.exam);
   const wrong = questions.filter((q) => answers[q.id] !== undefined && answers[q.id] !== q.correct);
+  const [filter, setFilter] = useState<'all' | 'wrong'>(wrong.length ? 'wrong' : 'all');
+  const shown = filter === 'all' ? questions : wrong;
   const timeUp = isExam && attempt.finishedAt - attempt.startedAt >= cfg.minutes * 60000 - 1000;
   const pct = attempt.total ? Math.round((attempt.correct / attempt.total) * 100) : 0;
   const secs = Math.round((attempt.finishedAt - attempt.startedAt) / 1000);
@@ -296,23 +308,42 @@ function Result({ attempt, questions, answers, isExam, onRestart }: { attempt: A
           <Link className="btn ghost" to="/">{t('Bosh sahifaga')}</Link>
         </div>
       </section>
-      {wrong.length > 0 && (
-        <section>
-          <h3>{t("Xatolarni ko'rish")}</h3>
-          {wrong.map((q) => {
-            const rule = ruleById(q.rule);
-            return (
-              <div key={q.id} className="review-item">
+      <section>
+        <div className="review-head">
+          <h3>{t("Javoblar tahlili")}</h3>
+          <div className="chips">
+            <button className={'chip ' + (filter === 'all' ? 'active' : '')} onClick={() => setFilter('all')}>{t('Barchasi')} ({questions.length})</button>
+            <button className={'chip ' + (filter === 'wrong' ? 'active' : '')} onClick={() => setFilter('wrong')}>{t("Noto'g'ri")} ({wrong.length})</button>
+          </div>
+        </div>
+        {shown.map((q) => {
+          const rule = ruleById(q.rule);
+          const a = answers[q.id];
+          const state = a === undefined ? 'skip' : a === q.correct ? 'ok' : 'bad';
+          return (
+            <div key={q.id} className={'review-item ' + state}>
+              <div className="review-row">
+                <span className="review-n">{questions.indexOf(q) + 1}</span>
                 <p className="q-text small">{tc(q.text)}</p>
-                <p className="bad-text">✗ {tc(q.options[answers[q.id]])}</p>
-                <p className="good-text">✓ {tc(q.options[q.correct])}</p>
-                {q.explanation && <p className="muted">{tc(q.explanation)}</p>}
-                {rule && <Link to={`/guide/rules/${rule.id}`} className="rule-link">📖 {tc(rule.title)}</Link>}
+                {(q.scene || q.sign || q.image) && <span className="review-thumb"><QuestionMedia q={q} size={64} /></span>}
               </div>
-            );
-          })}
-        </section>
-      )}
+              {state === 'bad' && <p className="bad-text">✗ {t('Sizning javobingiz')}: {tc(q.options[a])}</p>}
+              {state === 'skip' && <p className="muted">— {t('Javob berilmagan')}</p>}
+              <p className="good-text">✓ {t("To'g'ri javob")}: {tc(q.options[q.correct])}</p>
+              {q.explanation && <p className="muted small">{tc(q.explanation)}</p>}
+              {rule && <Link to={`/guide/rules/${rule.id}`} className="rule-link">📖 {tc(rule.title)}</Link>}
+            </div>
+          );
+        })}
+      </section>
     </div>
   );
+}
+
+export function QuestionMedia({ q, size }: { q: Question; size: number }) {
+  const sign = signById(q.sign);
+  if (q.scene) return <Scene scene={q.scene} size={size * 1.6} />;
+  if (q.image) return <img src={q.image} alt="" className="q-img" style={{ maxHeight: size * 1.8 }} />;
+  if (sign) return <RoadSign sign={sign} size={size} />;
+  return <div className="q-placeholder" style={{ fontSize: size / 3 }}>{topicById(q.topic)?.icon ?? '🚗'}</div>;
 }

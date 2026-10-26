@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/ui';
-import { getState, initialState, replaceState, updateSettings, useStore, type Lang } from '../store/store';
+import { getState, initialState, replaceState, setGuest, updateSettings, useSession, useStore, type Lang } from '../store/store';
+import { api, logout } from '../store/api';
 import { useT } from '../store/i18n';
 
 const LANGS: { id: Lang; label: string }[] = [
@@ -24,6 +25,7 @@ export default function Settings() {
   const st = useStore((s) => s.settings);
   const fileRef = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState('');
+  const session = useSession();
 
   const importData = async (f: File) => {
     try {
@@ -39,6 +41,22 @@ export default function Settings() {
   return (
     <div className="page">
       <PageHeader title={t('Sozlamalar')} back={false} />
+      <section className="panel">
+        {session ? (<>
+          <div className="account">
+            <span className="avatar">{(session.user.name || session.user.login)[0]?.toUpperCase()}</span>
+            <span className="grow"><b>{session.user.name}</b><br /><span className="muted small">@{session.user.login}</span></span>
+            <button className="btn ghost small" onClick={() => { if (confirm('Hisobdan chiqasizmi?')) logout(); }}>{t('Chiqish')}</button>
+          </div>
+          <p className="muted small">Progressingiz serverda saqlanadi: boshqa telefon yoki kompyuterdan shu login bilan kirsangiz, davom ettirasiz.</p>
+          <ChangePassword />
+        </>) : (<>
+          <p><b>Mehmon rejimi</b></p>
+          <p className="muted small">Progress faqat shu qurilmada. Hisob ochsangiz, natijalaringiz saqlanadi va boshqa qurilmadan ham ko'rinadi.</p>
+          <button className="btn" onClick={() => setGuest(false)}>{t('Kirish')} / {t("Ro'yxatdan o'tish")}</button>
+        </>)}
+      </section>
+
       <section className="panel form">
         <label>{t('Ism')}<input value={st.name} onChange={(e) => updateSettings({ name: e.target.value })} placeholder="Ismingiz" /></label>
         <label>{t('Imtihon sanasi')}<input type="date" value={st.examDate} onChange={(e) => updateSettings({ examDate: e.target.value })} /></label>
@@ -80,9 +98,29 @@ export default function Settings() {
       </section>
 
       <section className="panel">
-        <Link to="/admin" className="list-item">🛠 {t('Admin panel')} <span className="muted small">(moderator)</span></Link>
+        <Link to="/admin" className="list-item">🛠 {t('Admin panel')} <span className="muted small">(administrator kirishi)</span></Link>
         <p className="muted small">Avtotest v1.0 · Savollar bazasi namunaviy, rasmiy biletlar emas.</p>
       </section>
     </div>
+  );
+}
+
+function ChangePassword() {
+  const [open, setOpen] = useState(false);
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [msg, setMsg] = useState('');
+  if (!open) return <button className="btn ghost small" onClick={() => setOpen(true)}>Parolni o'zgartirish</button>;
+  return (
+    <form className="form" onSubmit={async (e) => {
+      e.preventDefault();
+      try { await api('/auth?action=password', { body: { password: cur, newPassword: next } }); setMsg("Parol o'zgartirildi"); setCur(''); setNext(''); }
+      catch (err) { setMsg(err instanceof Error ? err.message : 'Xatolik'); }
+    }}>
+      <label>Joriy parol<input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></label>
+      <label>Yangi parol<input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={8} required /></label>
+      {msg && <p className="small">{msg}</p>}
+      <div className="row-wrap"><button className="btn small">Saqlash</button><button type="button" className="btn ghost small" onClick={() => setOpen(false)}>Yopish</button></div>
+    </form>
   );
 }

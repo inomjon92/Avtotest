@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Card, PageHeader, Progress, toneFor } from '../components/ui';
 import { EXAM_TIPS } from '../data/extra';
-import { readinessIndex } from '../lib/exam';
+import { buildTickets, readinessIndex } from '../lib/exam';
+import { RULES } from '../data/rules';
+import { TOPICS } from '../data/topics';
 import { isDue, isMastered } from '../lib/srs';
-import { dayStreak, publishedQuestions, todayKey, useStore } from '../store/store';
+import { dayStreak, publishedQuestions, todayKey, useSession, useStore } from '../store/store';
 import { useT } from '../store/i18n';
 
 export default function Home() {
@@ -24,6 +26,21 @@ export default function Home() {
   const planPerDay = daysLeft && daysLeft > 0 ? Math.max(10, Math.ceil((left * 2) / daysLeft)) : s.settings.dailyGoal;
   const goal = planPerDay;
   const examDay = daysLeft !== null && daysLeft >= 0 && daysLeft <= 1;
+  const session = useSession();
+  const name = session?.user.name || s.settings.name;
+
+  // O'tilganlar va keyingi qadam
+  const tickets = buildTickets(pool, s.exam.ticketSize);
+  const passedTicket = (n: number) => s.attempts.some((a) => a.mode === 'ticket' && a.title === `Bilet ${n}` && a.passed);
+  const ticketsDone = [...tickets.keys()].filter(passedTicket).length;
+  const nextTicket = [...tickets.keys()].find((n) => !passedTicket(n));
+  const rulesDone = RULES.filter((r) => s.rulesRead[r.id]).length;
+  const nextRule = RULES.find((r) => !s.rulesRead[r.id]);
+  const topicsDone = TOPICS.filter((tp) => {
+    const qs = pool.filter((q) => q.topic === tp.id);
+    return qs.length > 0 && qs.every((q) => s.stats[q.id]?.lastCorrect);
+  }).length;
+  const last = s.attempts[s.attempts.length - 1];
 
   return (
     <div className="page">
@@ -31,7 +48,7 @@ export default function Home() {
 
       <section className="hero">
         <div>
-          <p className="muted">{t('Salom')}{s.settings.name ? `, ${s.settings.name}` : ''}!</p>
+          <p className="muted">{t('Salom')}{name ? `, ${name}` : ''}!</p>
           <h2>{t('Umumiy progress')}: {pct}%</h2>
           <Progress value={pct} tone={toneFor(pct)} />
           <p className="muted small">{t("O'zlashtirilgan")}: {mastered} / {pool.length} {t('savol')}</p>
@@ -40,6 +57,24 @@ export default function Home() {
           <div><b>🔥 {streak}</b><span>{t('Kunlik seriya')}</span></div>
           <div><b>{readiness === null ? '—' : readiness + '%'}</b><span>{t('Tayyorlik indeksi')}</span></div>
           <div><b>{today}/{goal}</b><span>{t('Bugun')}</span></div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>📌 {t("O'tilganlar")}</h3>
+        <div className="done-grid">
+          <Link to="/tests#tickets"><b>{ticketsDone}/{tickets.size}</b><span>{t('Biletlar')}</span></Link>
+          <Link to="/guide"><b>{rulesDone}/{RULES.length}</b><span>{t('Darslar')}</span></Link>
+          <Link to="/tests#topics"><b>{topicsDone}/{TOPICS.length}</b><span>{t('Mavzular')}</span></Link>
+        </div>
+        {last && (
+          <p className="small">{t('Oxirgi test')}: <b>{last.title}</b> — {last.correct}/{last.total}{last.passed !== undefined && (last.passed ? ' ✓' : ' ✗')} · <span className="muted">{new Date(last.finishedAt).toLocaleDateString('ru-RU')}</span>
+            {last.path && <> · <Link to={last.path}>{t('Qayta ishlash')}</Link></>}</p>
+        )}
+        <div className="row-wrap">
+          {nextRule && <Link className="btn ghost small" to={`/guide/rules/${nextRule.id}`}>📖 {t('Keyingi dars')}: {tc(nextRule.title)}</Link>}
+          {nextTicket && <Link className="btn ghost small" to={`/quiz/ticket/${nextTicket}`}>🎫 {t('Keyingi bilet')}: {nextTicket}</Link>}
+          {mistakes > 0 && <Link className="btn ghost small" to="/quiz/mistakes">❌ {t('Xatolar')}: {mistakes}</Link>}
         </div>
       </section>
 

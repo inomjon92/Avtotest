@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Card, Empty, Modal, PageHeader } from '../components/ui';
 import { RoadSign } from '../components/RoadSign';
@@ -6,14 +6,22 @@ import { RULES, RULES_VERSION, ruleById } from '../data/rules';
 import { SIGNS, SIGN_GROUPS } from '../data/signs';
 import { DOCUMENTS, EXAM_TIPS, FINES } from '../data/extra';
 import type { RoadSign as Sign } from '../data/types';
-import { publishedQuestions, useStore } from '../store/store';
+import { markRuleRead, publishedQuestions, useStore } from '../store/store';
 import { useT } from '../store/i18n';
 
 export function GuideHome() {
   const { t } = useT();
+  const read = useStore((s) => s.rulesRead);
+  const done = RULES.filter((r) => read[r.id]).length;
+  const next = RULES.find((r) => !read[r.id]);
   return (
     <div className="page">
       <PageHeader title={t("Yo'riqnoma")} back={false} />
+      <section className="panel">
+        <b>📚 {t("O'qilgan bo'limlar")}: {done} / {RULES.length}</b>
+        <div className="progress"><div className={'progress-bar ' + (done === RULES.length ? 'good' : '')} style={{ width: `${(done / RULES.length) * 100}%` }} /></div>
+        {next ? <Link to={`/guide/rules/${next.id}`} className="small">{t('Keyingi dars')}: {next.title} →</Link> : <span className="good-text small">Barcha bo'limlar o'qilgan ✓</span>}
+      </section>
       <div className="grid">
         <Card to="/guide/rules" icon="📕" title={t("Yo'l harakati qoidalari")} />
         <Card to="/guide/signs" icon="⚠️" title={t("Yo'l belgilari")} subtitle={`${SIGNS.length} ta`} />
@@ -45,6 +53,7 @@ export function RulesList() {
       .filter(({ r, items }) => items.length > 0 || tc(r.title).toLowerCase().includes(needle));
   }, [q, tc]);
   const chapters = [...new Set(results.map((x) => x.r.chapter))];
+  const read = useStore((s) => s.rulesRead);
   return (
     <div className="page">
       <PageHeader title={t("Yo'l harakati qoidalari")} />
@@ -56,8 +65,8 @@ export function RulesList() {
           <h3 className="section-title">{tc(ch)}</h3>
           <div className="list">
             {results.filter((x) => x.r.chapter === ch).map(({ r, items }) => (
-              <Link key={r.id} to={`/guide/rules/${r.id}`} className="list-item column">
-                <span className="card-title">{tc(r.title)}</span>
+              <Link key={r.id} to={`/guide/rules/${r.id}`} className={'list-item column' + (read[r.id] ? ' done' : '')}>
+                <span className="card-title">{read[r.id] ? '✓ ' : ''}{tc(r.title)}</span>
                 {items.slice(0, 2).map((i, k) => <span key={k} className="muted small">{highlight(tc(i), q.trim())}</span>)}
               </Link>
             ))}
@@ -73,9 +82,11 @@ export function RuleDetail() {
   const { t, tc } = useT();
   const rule = ruleById(id);
   const s = useStore((x) => x);
+  useEffect(() => { if (rule) markRuleRead(rule.id); }, [rule]);
   if (!rule) return <div className="page"><PageHeader title="—" /><Empty>Bo'lim topilmadi</Empty></div>;
   const related = publishedQuestions(s).filter((q) => q.rule === rule.id);
   const siblings = RULES.filter((r) => r.topic === rule.topic && r.id !== rule.id);
+  const nextRule = RULES[RULES.indexOf(rule) + 1];
   return (
     <div className="page">
       <PageHeader title={tc(rule.title)} />
@@ -83,8 +94,10 @@ export function RuleDetail() {
       <ol className="rule-items">
         {rule.items.map((i, k) => <li key={k} id={`${rule.id}-${k + 1}`}>{tc(i)}</li>)}
       </ol>
+      <p className="good-text small center">✓ {t("Bo'lim o'qilgan deb belgilandi")}</p>
       <div className="row-center">
         <Link className="btn" to={`/quiz/topic/${rule.topic}`}>📝 {t("Shu mavzu bo'yicha test")}</Link>
+        {nextRule && <Link className="btn ghost" to={`/guide/rules/${nextRule.id}`}>{t('Keyingi dars')} →</Link>}
       </div>
       {related.length > 0 && (
         <section className="panel">
