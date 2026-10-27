@@ -352,3 +352,4 @@ label.check { display: flex; align-items: center; gap: 8px; margin: 8px 0; curso
 .bottom-nav a.active span:first-child { transform: translateY(-1px) scale(1.08); }
 .bottom-nav a span:first-child { transition: transform .15s ease; }
 @media (min-width: 900px) { .bottom-nav { max-width: 600px; margin: 0 auto; border: 1px solid var(--border); border-radius: 22px; } }
+.contact-link { border-style: solid; border-color: color-mix(in srgb, #229ed9 45%, var(--border)); }

@@ -1,4 +1,5 @@
 import { ApkLink } from '../components/ApkLink';
+import { ContactLink } from '../components/ContactLink';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, PasswordInput } from '../components/ui';
@@ -105,6 +106,7 @@ export default function Settings() {
 
       <section className="panel">
         <Link to="/admin" className="list-item">🛠 {t('Admin panel')} <span className="muted small">(administrator kirishi)</span></Link>
+        <ContactLink />
         <ApkLink />
         <p className="muted small">Avtotest · versiya {__BUILD__} · Savollar bazasi namunaviy, rasmiy biletlar emas.</p>
       </section>

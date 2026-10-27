@@ -1,4 +1,5 @@
 import { ApkLink } from '../components/ApkLink';
+import { ContactLink } from '../components/ContactLink';
 import { PasswordInput } from '../components/ui';
 import { useState } from 'react';
 import { apiAvailable, login, register } from '../store/api';
@@ -57,6 +58,7 @@ export default function Login() {
           <p className="notice small">Server manzili sozlanmagan, shuning uchun hisobga kirib bo'lmaydi. Ilovadan mehmon sifatida foydalanishingiz mumkin.</p>
           <button className="btn ghost full" onClick={() => setGuest(true)}>{t('Mehmon sifatida davom etish')}</button>
         </>)}
+        <ContactLink />
         <ApkLink />
         <a className="muted small" href="/admin">Administrator kirishi</a>
       </div>
