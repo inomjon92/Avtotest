@@ -282,3 +282,14 @@ label.check { display: flex; align-items: center; gap: 8px; margin: 8px 0; curso
 .pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 1.1rem; cursor: pointer; padding: 6px 8px; }
 .form .radio-list label, .radio-list label { display: flex; flex-direction: row; align-items: center; gap: 8px; font-weight: 500; }
 .radio-list { display: grid; gap: 6px; }
+
+/* Android ilovasini yuklab olish havolasi (faqat saytda) */
+.apk-link { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: 14px; color: inherit; text-decoration: none; margin: 8px 0; }
+.apk-link > span:first-child { font-size: 1.8rem; }
+.apk-link:hover { border-color: var(--primary); }
+
+/* Yo'l belgisi: hozirgi va yuborilgan rasm */
+.sign-compare { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.sign-compare figure { margin: 0; text-align: center; }
+.sign-compare img, .sign-empty { width: 90px; height: 90px; object-fit: contain; border-radius: 8px; background: var(--surface-2, rgba(127,127,127,.08)); }
+.sign-empty { display: grid; place-items: center; font-size: 2rem; color: var(--muted); }

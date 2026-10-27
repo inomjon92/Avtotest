@@ -1,5 +1,5 @@
 // Umumiy kontent: admin tahrirlagan savollar, imtihon sozlamalari va xato xabarlari.
-import { assertNotLocked, clientIp, currentUser, db, handler, HttpError, q, readToken, recordFailure, requireAdmin } from './_lib.js';
+import { assertNotLocked, cleanImage, clientIp, currentUser, db, handler, HttpError, q, readToken, recordFailure, requireAdmin } from './_lib.js';
 
 const MAX_BYTES = 8_000_000;
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
@@ -18,12 +18,13 @@ export default handler(async (req) => {
   const action = q(req, 'action');
 
   if (req.method === 'GET' && !action) {
-    const rows = await s<{ key: string; value: unknown; updated_at: Date }[]>`select key, value, updated_at from settings where key in ('questions', 'exam', 'faq')`;
+    const rows = await s<{ key: string; value: unknown; updated_at: Date }[]>`select key, value, updated_at from settings where key in ('questions', 'exam', 'faq', 'signs')`;
     const get = (k: string) => rows.find((r) => r.key === k);
     return {
       questions: get('questions')?.value ?? {},
       exam: get('exam')?.value ?? null,
       faq: get('faq')?.value ?? null,
+      signs: get('signs')?.value ?? {},
       updatedAt: Math.max(0, ...rows.map((r) => r.updated_at.getTime())),
       build: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7),
     };
@@ -46,6 +47,23 @@ export default handler(async (req) => {
     return { ok: true };
   }
 
+  // Admin tasdiqlagan yo'l belgisi rasmlari: { [belgi id]: data URL } — chizilgan belgining o'rniga ko'rsatiladi
+  if (req.method === 'PUT' && action === 'signs') {
+    await requireAdmin(req);
+    const raw = req.body?.signs;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpError(400, "Noto'g'ri ma'lumot");
+    const signs: Record<string, string> = {};
+    for (const [id, img] of Object.entries(raw)) {
+      const clean = cleanImage(img, 400_000);
+      if (!/^[\w.-]{1,40}$/.test(id) || !clean) throw new HttpError(400, `Belgi rasmi noto'g'ri: ${id.slice(0, 40)}`);
+      signs[id] = clean;
+    }
+    if (JSON.stringify(signs).length > MAX_BYTES) throw new HttpError(413, 'Belgi rasmlari hajmi juda katta');
+    await s`insert into settings (key, value) values ('signs', ${s.json(signs)})
+            on conflict (key) do update set value = excluded.value, updated_at = now()`;
+    return { ok: true };
+  }
+
   if (req.method === 'PUT' && action === 'faq') {
     await requireAdmin(req);
     const faq = req.body?.faq;
@@ -63,8 +81,11 @@ export default handler(async (req) => {
     if (!qid || !reason) throw new HttpError(400, "Xatolik sababini tanlang");
     // Tuzatish taklifi (savol matni, variantlar, to'g'ri javob) — ixtiyoriy
     const proposal = req.body?.proposal ? cleanProposal(req.body.proposal) : null;
-    if (comment.length < 5 && !proposal) throw new HttpError(400, "Xatolik sababini yozing (kamida 5 belgi) yoki savolni tuzatib yuboring");
-    const image = typeof req.body?.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(req.body.image) && req.body.image.length < 1_500_000 ? req.body.image : null;
+    const image = cleanImage(req.body?.image);
+    if (req.body?.image && !image) throw new HttpError(400, "Rasm faqat JPEG, PNG yoki WebP bo'lishi kerak (1 MB gacha)");
+    if (String(qid).startsWith('sign:')) {
+      if (!image && comment.length < 5) throw new HttpError(400, "Belgining to'g'ri rasmini biriktiring yoki nima xatoligini yozing");
+    } else if (comment.length < 5 && !proposal) throw new HttpError(400, "Xatolik sababini yozing (kamida 5 belgi) yoki savolni tuzatib yuboring");
     if (uid) {
       const [{ n }] = await s`select count(*)::int as n from reports where user_id = ${uid} and at > now() - interval '1 day'`;
       if (n >= 30) throw new HttpError(429, "Bir kunda 30 tadan ortiq xabar yuborib bo'lmaydi");

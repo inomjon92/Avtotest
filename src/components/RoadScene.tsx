@@ -362,7 +362,7 @@ export function RoadScene({ spec, size = 260 }: { spec: RoadSpec; size?: number 
         return (
           <g key={i}>
             <line x1={s.x} y1={s.y + sz / 2 - 2} x2={s.x} y2={s.y + sz / 2 + 12} stroke="#374151" strokeWidth="2.5" />
-            <g transform={`translate(${s.x - sz / 2} ${s.y - sz / 2})`}><RoadSign sign={s.text ? { ...sign, symbol: s.text } : sign} size={sz} bg={s.temp ? '#fde047' : undefined} /></g>
+            <g transform={`translate(${s.x - sz / 2} ${s.y - sz / 2})`}><RoadSign sign={s.text ? { ...sign, symbol: s.text } : sign} size={sz} bg={s.temp ? '#fde047' : undefined} drawn={!!s.text || !!s.temp} /></g>
           </g>
         );
       })}

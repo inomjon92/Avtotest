@@ -1,4 +1,5 @@
 import type { RoadSign as Sign } from '../data/types';
+import { useStore } from '../store/store';
 
 const ARROWS: Record<string, string> = {
   'arrow-up': 'M50 18 L68 40 H57 V82 H43 V40 H32 Z',
@@ -206,8 +207,18 @@ function Symbol({ symbol, color = '#111827', size = 40 }: { symbol?: string; col
   );
 }
 
-export function RoadSign({ sign, size = 96, title, bg }: { sign: Sign; size?: number; title?: string; bg?: string }) {
+export function RoadSign({ sign, size = 96, title, bg, drawn }: { sign: Sign; size?: number; title?: string; bg?: string; drawn?: boolean }) {
   const label = title ?? `${sign.code} ${sign.name}`;
+  // Admin tasdiqlagan haqiqiy rasm bo'lsa, chizma o'rniga o'sha ko'rsatiladi
+  const photo = useStore((s) => (drawn ? undefined : s.signImages?.[sign.id]));
+  if (photo) {
+    return (
+      <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={label} className="road-sign">
+        <title>{label}</title>
+        <image href={photo} x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+      </svg>
+    );
+  }
   let body: React.ReactNode;
   switch (sign.shape) {
     case 'warning':

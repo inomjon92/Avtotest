@@ -17,7 +17,7 @@ import {
 } from '../store/store';
 import { useT } from '../store/i18n';
 import { ApiError, sendReport } from '../store/api';
-import { resizeImage } from '../lib/image';
+import { IMAGE_ACCEPT, IMAGE_FORMATS, resizeImage } from '../lib/image';
 import { mixedQuestions, topicScores, weakPractice, weakTopics } from '../lib/analysis';
 
 interface QuizSpec { title: string; questions: Question[]; mode: Mode }
@@ -304,11 +304,12 @@ function ReportModal({ open, onClose, q }: { open: boolean; onClose: () => void;
           <div className="row-wrap">
             <button type="button" className="btn ghost small" onClick={() => fileRef.current?.click()}>📷 {image ? 'Rasmni almashtirish' : 'Rasm biriktirish'}</button>
             {image && <button type="button" className="btn ghost small" onClick={() => setImage(undefined)}>✕ Rasmni olib tashlash</button>}
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={async (e) => {
+            <input ref={fileRef} type="file" accept={IMAGE_ACCEPT} hidden onChange={async (e) => {
               const f = e.target.files?.[0];
               e.target.value = '';
-              if (f) try { setImage(await resizeImage(f, 1000)); } catch { setError("Rasmni o'qib bo'lmadi"); }
+              if (f) try { setImage(await resizeImage(f, 1000)); setError(''); } catch (er) { setError(er instanceof Error ? er.message : "Rasmni o'qib bo'lmadi"); }
             }} />
+            <span className="muted tiny">{IMAGE_FORMATS}, avtomatik kichraytiriladi</span>
           </div>
           {image && <img src={image} alt="Biriktirilgan rasm" className="report-img" />}
 

@@ -1,3 +1,4 @@
+import { ApkLink } from '../components/ApkLink';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { advice, topicScores } from '../lib/analysis';
@@ -146,6 +147,7 @@ export default function Home() {
         <h3>💡 {t('Maslahat')}</h3>
         <p>{tc(EXAM_TIPS[new Date().getDate() % EXAM_TIPS.length])}</p>
       </section>
+      <ApkLink />
     </div>
   );
 }

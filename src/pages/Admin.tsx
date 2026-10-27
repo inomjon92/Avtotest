@@ -8,10 +8,10 @@ import { SIGNS, signById } from '../data/signs';
 import { questionsFromCSV, toCSV } from '../lib/csv';
 import type { ExamConfig } from '../lib/exam';
 import { allQuestions, getState, recordVersion, useStore } from '../store/store';
-import { adminLogin, api, getAdminToken, saveContentQuestions, saveExamConfig, setAdminToken, subscribeAdmin } from '../store/api';
+import { adminLogin, api, getAdminToken, saveContentQuestions, saveExamConfig, saveSignImage, setAdminToken, subscribeAdmin } from '../store/api';
 import { QuestionMedia } from './Quiz';
 import { download } from './Settings';
-import { resizeImage } from '../lib/image';
+import { IMAGE_ACCEPT, IMAGE_FORMATS, resizeImage } from '../lib/image';
 import Gallery from './Gallery';
 import { DEFAULT_FAQ, type FaqItem } from '../lib/chatbot';
 import { loadContent, saveFaq } from '../store/api';
@@ -361,11 +361,12 @@ function QuestionEditor({ initial, onClose, onSaved }: { initial: Question; onCl
         <div className="row-wrap">
           <button type="button" className="btn ghost small" onClick={() => fileRef.current?.click()}>🖼 Rasm yuklash</button>
           {q.image && <button type="button" className="btn ghost small" onClick={() => set({ image: undefined })}>Rasmni olib tashlash</button>}
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={async (e) => {
+          <input ref={fileRef} type="file" accept={IMAGE_ACCEPT} hidden onChange={async (e) => {
             const f = e.target.files?.[0]; e.target.value = '';
             if (!f) return;
-            try { set({ image: await resizeImage(f) }); } catch (er) { setErr(er instanceof Error ? er.message : 'Xatolik'); }
+            try { set({ image: await resizeImage(f) }); setErr(''); } catch (er) { setErr(er instanceof Error ? er.message : 'Xatolik'); }
           }} />
+          <span className="muted tiny">{IMAGE_FORMATS}, avtomatik kichraytiriladi</span>
         </div>
         <label>Savol matni<textarea rows={3} value={q.text} onChange={(e) => set({ text: e.target.value })} /></label>
         <fieldset>
@@ -506,6 +507,32 @@ function ProposalDiff({ q, p }: { q: Question; p: Proposal }) {
   );
 }
 
+/** Yo'l belgisi haqidagi xabar: hozirgi belgi va foydalanuvchi yuborgan rasm yonma-yon */
+function SignReportInfo({ r, onAccepted }: { r: ReportRow; onAccepted: () => void }) {
+  const id = r.qid.slice(5);
+  const sign = SIGNS.find((x) => x.id === id);
+  const current = useStore((s) => s.signImages[id]);
+  const [msg, setMsg] = useState('');
+  if (!sign) return <p className="small"><span className="mono muted">{r.qid}</span> · belgi topilmadi</p>;
+  return (
+    <>
+      <p className="small">🚸 <b>{sign.code}</b> {sign.name} {current && <span className="badge">rasm almashtirilgan</span>}</p>
+      <div className="sign-compare">
+        <figure><RoadSign sign={sign} size={90} /><figcaption className="tiny muted">Hozirgi</figcaption></figure>
+        {r.image && <figure><a href={r.image} target="_blank" rel="noreferrer"><img src={r.image} alt="Foydalanuvchi yuborgan belgi" /></a><figcaption className="tiny muted">Foydalanuvchi yuborgan</figcaption></figure>}
+      </div>
+      <div className="row-wrap">
+        {r.image && <button className="btn small" onClick={async () => {
+          if (!confirm(`${sign.code} belgisi hamma foydalanuvchilar uchun shu rasm bilan almashtirilsinmi?`)) return;
+          try { await saveSignImage(id, r.image!); onAccepted(); } catch (e) { setMsg(e instanceof Error ? e.message : 'Xatolik'); }
+        }}>✓ Rasmni belgi sifatida qabul qilish</button>}
+        {current && <button className="btn ghost small" onClick={async () => { try { await saveSignImage(id); } catch (e) { setMsg(e instanceof Error ? e.message : 'Xatolik'); } }}>↺ Asl chizmaga qaytarish</button>}
+      </div>
+      {msg && <p className="bad-text small">{msg}</p>}
+    </>
+  );
+}
+
 function ReportsTab({ onChange }: { onChange: () => void }) {
   const s = useStore((x) => x);
   const { data, error, reload } = useApi<{ reports: ReportRow[] }>('/admin?action=reports');
@@ -524,9 +551,11 @@ function ReportsTab({ onChange }: { onChange: () => void }) {
       {list.length === 0 ? <Empty>Xabarlar yo'q</Empty> : list.map((r) => (
         <div key={r.id} className="review-item">
           <p><b>{r.reason}</b> · <span className="muted small">{fmtDate(r.at)} · {r.login ? '@' + r.login : 'mehmon'}</span></p>
-          <p className="small"><span className="mono muted">{r.qid}</span> · {byId.get(r.qid)?.text ?? "savol topilmadi (o'chirilgan bo'lishi mumkin)"}</p>
+          {r.qid.startsWith('sign:') ? <SignReportInfo r={r} onAccepted={() => setStatus(r.id, 'resolved')} /> : (
+            <p className="small"><span className="mono muted">{r.qid}</span> · {byId.get(r.qid)?.text ?? "savol topilmadi (o'chirilgan bo'lishi mumkin)"}</p>
+          )}
           {r.comment && <p className="muted small">“{r.comment}”</p>}
-          {r.image && <a href={r.image} target="_blank" rel="noreferrer"><img src={r.image} alt="Foydalanuvchi rasmi" className="report-img" /></a>}
+          {r.image && !r.qid.startsWith('sign:') && <a href={r.image} target="_blank" rel="noreferrer"><img src={r.image} alt="Foydalanuvchi rasmi" className="report-img" /></a>}
           {r.proposal && byId.get(r.qid) && <ProposalDiff q={byId.get(r.qid)!} p={r.proposal} />}
           <div className="row-wrap">
             {r.proposal && byId.get(r.qid) && <button className="btn small" onClick={() => setFix({ q: { ...byId.get(r.qid)!, ...r.proposal! }, report: r.id })}>✓ Taklifni ko'rib qabul qilish</button>}

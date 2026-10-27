@@ -164,6 +164,22 @@ export function summarize(state: any, now = new Date()) {
   };
 }
 
+/**
+ * Rasm faqat JPEG, PNG yoki WebP data URL bo'lsa qabul qilinadi (fayl boshidagi baytlar ham tekshiriladi).
+ * Rasm ilovada oldindan kichraytiriladi; bu yerda chegaradan katta bo'lsa rad etiladi.
+ */
+export function cleanImage(v: unknown, maxBytes = 1_000_000): string | null {
+  if (typeof v !== 'string') return null;
+  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(v);
+  if (!m) return null;
+  if (m[2].length * 0.75 > maxBytes) return null;
+  const head = Buffer.from(m[2].slice(0, 24), 'base64');
+  const ok = m[1] === 'jpeg' ? head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff
+    : m[1] === 'png' ? head.subarray(0, 4).toString('hex') === '89504e47'
+    : head.subarray(0, 4).toString() === 'RIFF' && head.subarray(8, 12).toString() === 'WEBP';
+  return ok ? v : null;
+}
+
 export class HttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }

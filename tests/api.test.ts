@@ -252,6 +252,20 @@ describe.skipIf(!enabled)('server API', () => {
     expect((await call('/admin?action=users', { token: tok })).status).toBe(200);
   });
 
+  it("yo'l belgisi xatosi rasm bilan yuboriladi, admin rasmni qabul qiladi; noto'g'ri format rad etiladi", async () => {
+    const png = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]).toString('base64');
+    const fake = 'data:image/png;base64,' + Buffer.from('<svg onload=alert(1)>').toString('base64');
+    expect((await call('/content?action=report', { body: { qid: 'sign:1.1', reason: "Belgi rasmi noto'g'ri", comment: '', image: fake }, token: userToken })).status).toBe(400);
+    expect((await call('/content?action=report', { body: { qid: 'sign:1.1', reason: "Belgi rasmi noto'g'ri", comment: '' }, token: userToken })).status).toBe(400);
+    expect((await call('/content?action=report', { body: { qid: 'sign:1.1', reason: "Belgi rasmi noto'g'ri", comment: '', image: png }, token: userToken })).status).toBe(200);
+    const reps = (await call('/admin?action=reports', { token: adminToken })).data.reports;
+    expect(reps.find((r: any) => r.qid === 'sign:1.1').image).toBe(png);
+    expect((await call('/content?action=signs', { method: 'PUT', body: { signs: { '1.1': png } }, token: userToken })).status).toBe(401);
+    expect((await call('/content?action=signs', { method: 'PUT', body: { signs: { '1.1': fake } }, token: adminToken })).status).toBe(400);
+    expect((await call('/content?action=signs', { method: 'PUT', body: { signs: { '1.1': png } }, token: adminToken })).status).toBe(200);
+    expect((await call('/content')).data.signs['1.1']).toBe(png);
+  });
+
   it('bloklangan foydalanuvchi kira olmaydi', async () => {
     const users = (await call('/admin?action=users', { token: adminToken })).data.users;
     const ali = users.find((u: any) => u.login === 'ali' + suffix);

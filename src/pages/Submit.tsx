@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '../components/ui';
 import { TOPICS, topicById } from '../data/topics';
-import { resizeImage } from '../lib/image';
+import { IMAGE_ACCEPT, IMAGE_FORMATS, resizeImage } from '../lib/image';
 import { mySubmissions, submitQuestion, type Submission, type SubmittedQuestion } from '../store/api';
 import { setGuest, useSession } from '../store/store';
 
@@ -56,10 +56,11 @@ export default function Submit() {
         <div className="row-wrap">
           <button type="button" className="btn ghost small" onClick={() => fileRef.current?.click()}>🖼 Rasm qo'shish (ixtiyoriy)</button>
           {q.image && <><img src={q.image} alt="" className="q-img" style={{ maxHeight: 80 }} /><button type="button" className="btn ghost small" onClick={() => set({ image: undefined })}>Olib tashlash</button></>}
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={async (e) => {
+          <input ref={fileRef} type="file" accept={IMAGE_ACCEPT} hidden onChange={async (e) => {
             const f = e.target.files?.[0]; e.target.value = '';
-            if (f) try { set({ image: await resizeImage(f, 800) }); } catch { setMsg({ ok: false, text: "Rasmni o'qib bo'lmadi" }); }
+            if (f) try { set({ image: await resizeImage(f, 800) }); setMsg(null); } catch (er) { setMsg({ ok: false, text: er instanceof Error ? er.message : "Rasmni o'qib bo'lmadi" }); }
           }} />
+          <span className="muted tiny">{IMAGE_FORMATS}, avtomatik kichraytiriladi</span>
         </div>
         <fieldset>
           <legend>Javob variantlari (to'g'risini belgilang)</legend>

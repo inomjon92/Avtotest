@@ -5,7 +5,7 @@ import type { ExamConfig } from '../lib/exam';
 import type { FaqItem } from '../lib/chatbot';
 import { differs, mergeProgress } from '../lib/merge';
 import {
-  getSession, getState, onProgressChange, PROGRESS_KEYS, setContent, setSession, setStateQuiet, replaceSessionToken,
+  getSession, getState, onProgressChange, PROGRESS_KEYS, setContent, setSession, setStateQuiet, replaceSessionToken, setSignImages,
   type AppState, type Session,
 } from './store';
 
@@ -80,6 +80,14 @@ export async function register(loginName: string, password: string, name: string
   setStateQuiet((s) => ({ ...s, ...(hasGuestProgress ? pickProgress(local) : {}), settings: { ...s.settings, ...local.settings, name } , updatedAt: Date.now() }));
   await pushProgress();
   return r;
+}
+
+/** Admin: yo'l belgisi rasmini almashtirish (img = undefined bo'lsa asl chizmaga qaytadi) */
+export async function saveSignImage(id: string, img?: string) {
+  const signs = { ...getState().signImages };
+  if (img) signs[id] = img; else delete signs[id];
+  await api('/content?action=signs', { method: 'PUT', body: { signs }, admin: true });
+  setSignImages(signs);
 }
 
 export async function changePassword(password: string, newPassword: string) {
@@ -171,8 +179,9 @@ export const APK_URL = 'https://github.com/inomjon92/Avtotest/releases/download/
 
 export async function loadContent() {
   try {
-    const r = await api<{ questions: Record<string, Question>; exam: ExamConfig | null; faq: FaqItem[] | null; build?: string }>('/content', { auth: false });
+    const r = await api<{ questions: Record<string, Question>; exam: ExamConfig | null; faq: FaqItem[] | null; signs?: Record<string, string>; build?: string }>('/content', { auth: false });
     setContent(r.questions ?? {}, r.exam, r.faq ?? null);
+    setSignImages(r.signs ?? {});
     serverBuild = r.build ?? '';
     buildListeners.forEach((l) => l());
   } catch { /* oflayn — saqlangan kontent bilan ishlaymiz */ }

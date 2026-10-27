@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Card, Empty, Modal, PageHeader } from '../components/ui';
 import { RoadSign } from '../components/RoadSign';
@@ -6,7 +6,9 @@ import { RULES, RULES_VERSION, ruleById } from '../data/rules';
 import { SIGNS, SIGN_GROUPS } from '../data/signs';
 import { DOCUMENTS, EXAM_TIPS, FINES } from '../data/extra';
 import type { RoadSign as Sign } from '../data/types';
-import { markRuleRead, publishedQuestions, useStore } from '../store/store';
+import { addLocalReport, markRuleRead, publishedQuestions, useStore } from '../store/store';
+import { ApiError, getAdminToken, saveSignImage, sendReport } from '../store/api';
+import { IMAGE_ACCEPT, IMAGE_FORMATS, resizeImage } from '../lib/image';
 import { useT } from '../store/i18n';
 
 export function GuideHome() {
@@ -119,6 +121,7 @@ export function SignsCatalog() {
   const [group, setGroup] = useState<number | 0>(0);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Sign | null>(null);
+  const [report, setReport] = useState<Sign | null>(null);
   const s = useStore((x) => x);
   const list = SIGNS.filter((x) => (!group || x.group === group) && (!q || (x.code + ' ' + tc(x.name)).toLowerCase().includes(q.toLowerCase())));
   const related = open ? publishedQuestions(s).filter((x) => x.sign === open.id) : [];
@@ -148,10 +151,97 @@ export function SignsCatalog() {
           <p className="muted small">{tc(SIGN_GROUPS[open.group])}</p>
           <p>{tc(open.description)}</p>
           {related.length > 0 && <p className="small">Bu belgi {related.length} ta savolda uchraydi.</p>}
-          <div className="row-center"><Link className="btn" to="/quiz/topic/belgilar" onClick={() => setOpen(null)}>📝 {t("Shu mavzu bo'yicha test")}</Link></div>
+          <div className="row-center">
+            <Link className="btn" to="/quiz/topic/belgilar" onClick={() => setOpen(null)}>📝 {t("Shu mavzu bo'yicha test")}</Link>
+            <button className="btn ghost report-btn" onClick={() => { setReport(open); setOpen(null); }}>⚠️ {t("Belgi xato?")}</button>
+          </div>
+          {getAdminToken() && <AdminSignImage id={open.id} />}
         </>)}
       </Modal>
+      <SignReportModal sign={report} onClose={() => setReport(null)} />
     </div>
+  );
+}
+
+/** Admin belgining rasmini o'zi yuklashi yoki asl chizmaga qaytarishi mumkin */
+function AdminSignImage({ id }: { id: string }) {
+  const current = useStore((s) => s.signImages[id]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [msg, setMsg] = useState('');
+  return (
+    <div className="row-center">
+      <button className="btn ghost small" onClick={() => fileRef.current?.click()}>🖼 Rasm yuklash (admin)</button>
+      {current && <button className="btn ghost small" onClick={async () => { try { await saveSignImage(id); } catch (e) { setMsg(e instanceof Error ? e.message : 'Xatolik'); } }}>↺ Asl chizmaga qaytarish</button>}
+      <input ref={fileRef} type="file" accept={IMAGE_ACCEPT} hidden onChange={async (e) => {
+        const f = e.target.files?.[0]; e.target.value = '';
+        if (f) try { await saveSignImage(id, await resizeImage(f, 400, { keepAlpha: true, maxBytes: 300_000 })); setMsg(''); } catch (er) { setMsg(er instanceof Error ? er.message : 'Xatolik'); }
+      }} />
+      {msg && <p className="bad-text small">{msg}</p>}
+    </div>
+  );
+}
+
+const SIGN_REASONS = ["Belgi rasmi noto'g'ri", "Belgi nomi yoki raqami noto'g'ri", "Tavsif noto'g'ri", 'Boshqa'];
+
+/** Yo'l belgisida xato: foydalanuvchi to'g'ri belgining rasmini yuklab moderatorga yuboradi */
+function SignReportModal({ sign, onClose }: { sign: Sign | null; onClose: () => void }) {
+  const { tc } = useT();
+  const [reason, setReason] = useState(SIGN_REASONS[0]);
+  const [comment, setComment] = useState('');
+  const [image, setImage] = useState<string>();
+  const [state, setState] = useState<'form' | 'sending' | 'sent'>('form');
+  const [error, setError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!sign) return;
+    setReason(SIGN_REASONS[0]); setComment(''); setImage(undefined); setState('form'); setError('');
+  }, [sign]);
+  if (!sign) return null;
+  const qid = 'sign:' + sign.id;
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!image && comment.trim().length < 5) return setError("To'g'ri belgining rasmini yuklang yoki nima xatoligini yozing (kamida 5 belgi)");
+    setState('sending'); setError('');
+    try { await sendReport({ qid, reason, comment: comment.trim(), image }); setState('sent'); }
+    catch (err) {
+      if (err instanceof ApiError && err.status === 0) { addLocalReport({ qid, reason, comment: comment.trim() }); setState('sent'); }
+      else { setError(err instanceof Error ? err.message : 'Xatolik'); setState('form'); }
+    }
+  };
+  return (
+    <Modal open onClose={onClose} title={`${sign.code} ${tc(sign.name)}: xato bormi?`}>
+      {state === 'sent' ? (<>
+        <p>Rahmat! Moderator tekshirib, to'g'ri bo'lsa belgini hamma uchun almashtiradi.</p>
+        <div className="row-end"><button className="btn" onClick={onClose}>Yopish</button></div>
+      </>) : (
+        <form className="form" onSubmit={submit}>
+          <div className="sign-compare">
+            <figure><RoadSign sign={sign} size={90} /><figcaption className="tiny muted">Hozirgi</figcaption></figure>
+            <figure>{image ? <img src={image} alt="Yuklangan belgi" /> : <div className="sign-empty">?</div>}<figcaption className="tiny muted">Siz yuborgan</figcaption></figure>
+          </div>
+          <div className="radio-list">
+            {SIGN_REASONS.map((r) => <label key={r}><input type="radio" name="sreason" checked={reason === r} onChange={() => setReason(r)} /> {r}</label>)}
+          </div>
+          <div className="row-wrap">
+            <button type="button" className="btn small" onClick={() => fileRef.current?.click()}>📷 {image ? 'Rasmni almashtirish' : "To'g'ri belgining rasmini yuklash"}</button>
+            {image && <button type="button" className="btn ghost small" onClick={() => setImage(undefined)}>✕ Olib tashlash</button>}
+            <input ref={fileRef} type="file" accept={IMAGE_ACCEPT} hidden onChange={async (e) => {
+              const f = e.target.files?.[0]; e.target.value = '';
+              if (f) try { setImage(await resizeImage(f, 400, { keepAlpha: true, maxBytes: 300_000 })); setError(''); } catch (er) { setError(er instanceof Error ? er.message : "Rasmni o'qib bo'lmadi"); }
+            }} />
+          </div>
+          <p className="muted tiny">{IMAGE_FORMATS}. Rasm avtomatik kichraytiriladi. Belgini yaqindan, faqat o'zini kesib oling.</p>
+          <label>Izoh <span className="muted small">(ixtiyoriy, rasm yuklasangiz)</span>
+            <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} placeholder="Masalan: bu belgi 3.20 emas, 3.21 bo'lishi kerak" />
+          </label>
+          {error && <p className="bad-text small">{error}</p>}
+          <div className="row-end">
+            <button type="button" className="btn ghost" onClick={onClose}>Bekor qilish</button>
+            <button className="btn" disabled={state === 'sending'}>{state === 'sending' ? 'Yuborilmoqda…' : 'Moderatorga yuborish'}</button>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }
 

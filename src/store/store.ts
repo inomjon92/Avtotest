@@ -64,6 +64,8 @@ export interface AppState {
   customQuestions: Record<string, Question>;
   /** Admin tahrirlagan chat-bot javoblari (serverdan keladi) */
   faq: FaqItem[] | null;
+  /** Admin tasdiqlagan yo'l belgisi rasmlari: belgi id -> data URL (serverdan keladi) */
+  signImages: Record<string, string>;
   versions: Record<string, Question[]>;
 }
 
@@ -84,6 +86,7 @@ export const initialState = (): AppState => ({
   reports: [],
   customQuestions: {},
   faq: null,
+  signImages: {},
   versions: {},
 });
 
@@ -169,7 +172,7 @@ export function replaceSessionToken(token: string) {
 }
 
 export function setSession(next: Session | null, remember = true) {
-  const content = { customQuestions: state.customQuestions, exam: state.exam, faq: state.faq };
+  const content = { customQuestions: state.customQuestions, exam: state.exam, faq: state.faq, signImages: state.signImages };
   session = next;
   try {
     localStorage.removeItem(SESSION_KEY);
@@ -237,6 +240,10 @@ export function setMarathon(m: AppState['marathon']) {
 // Kontent (savollar, imtihon formati) — barcha foydalanuvchilar uchun umumiy, serverdan keladi
 export function setContent(customQuestions: Record<string, Question>, exam?: ExamConfig | null, faq?: FaqItem[] | null) {
   setStateQuiet((s) => ({ ...s, customQuestions, exam: exam ? { ...DEFAULT_EXAM, ...exam } : s.exam, faq: faq === undefined ? s.faq : faq }));
+}
+
+export function setSignImages(signImages: Record<string, string>) {
+  setStateQuiet((s) => ({ ...s, signImages }));
 }
 
 export function addLocalReport(r: Omit<Report, 'id' | 'at' | 'status'>) {
