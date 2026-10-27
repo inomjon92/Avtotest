@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, PasswordInput } from '../components/ui';
 import { getState, initialState, replaceState, setGuest, updateSettings, useSession, useStore, type Lang } from '../store/store';
-import { api, logout } from '../store/api';
+import { changePassword, logout } from '../store/api';
 import { useT } from '../store/i18n';
 
 const LANGS: { id: Lang; label: string }[] = [
@@ -119,7 +119,7 @@ function ChangePassword() {
   return (
     <form className="form" onSubmit={async (e) => {
       e.preventDefault();
-      try { await api('/auth?action=password', { body: { password: cur, newPassword: next } }); setMsg("Parol o'zgartirildi"); setCur(''); setNext(''); }
+      try { await changePassword(cur, next); setMsg("Parol o'zgartirildi. Boshqa qurilmalardagi kirishlar bekor qilindi"); setCur(''); setNext(''); }
       catch (err) { setMsg(err instanceof Error ? err.message : 'Xatolik'); }
     }}>
       <label>Joriy parol<PasswordInput value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></label>

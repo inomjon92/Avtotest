@@ -53,6 +53,8 @@ async function migrate(s: Sql) {
   )`;
   await s`alter table users add column if not exists last_ip text not null default ''`;
   await s`alter table users add column if not exists last_agent text not null default ''`;
+  // Parol almashtirilganda eski tokenlar (boshqa qurilmalardagi) bekor bo'lishi uchun
+  await s`alter table users add column if not exists token_ver int not null default 0`;
   await s`alter table logins add column if not exists ip text not null default ''`;
   await s`create table if not exists auth_failures (
     id bigserial primary key,
@@ -186,18 +188,20 @@ function secret() {
   return process.env.AUTH_SECRET || createHash('sha256').update('avtotest:' + dbUrl()).digest('hex');
 }
 const b64 = (s: string) => Buffer.from(s).toString('base64url');
-interface TokenPayload { uid: number; adm?: boolean; exp: number }
+interface TokenPayload { uid: number; adm?: boolean; exp: number; v?: number; k?: string }
 
 function sign(payload: TokenPayload) {
   const body = b64(JSON.stringify(payload));
   const sig = createHmac('sha256', secret()).update(body).digest('base64url');
   return `${body}.${sig}`;
 }
-export function signToken(uid: number) {
-  return sign({ uid, exp: Date.now() + TOKEN_DAYS * 86400000 });
+export function signToken(uid: number, ver = 0) {
+  return sign({ uid, v: ver, exp: Date.now() + TOKEN_DAYS * 86400000 });
 }
+// Admin tokeni parolga bog'langan: Vercel'da ADMIN_PASSWORD almashtirilsa, eski admin tokenlari ishlamay qoladi
+const adminKey = () => createHash('sha256').update('adm:' + (process.env.ADMIN_LOGIN ?? '') + ':' + (process.env.ADMIN_PASSWORD ?? '')).digest('base64url').slice(0, 16);
 export function signAdminToken() {
-  return sign({ uid: 0, adm: true, exp: Date.now() + ADMIN_TOKEN_HOURS * 3600000 });
+  return sign({ uid: 0, adm: true, k: adminKey(), exp: Date.now() + ADMIN_TOKEN_HOURS * 3600000 });
 }
 function readPayload(token?: string): TokenPayload | null {
   if (!token) return null;
@@ -215,6 +219,7 @@ export function readToken(token?: string): number | null {
   const p = readPayload(token);
   return p && !p.adm && p.uid > 0 ? p.uid : null;
 }
+const tokenVer = (token?: string) => readPayload(token)?.v ?? 0;
 const bearer = (req: Req) => String(req.headers['authorization'] ?? '').replace(/^Bearer\s+/i, '');
 
 // ---- Admin hisob (Vercel muhit o'zgaruvchilarida: ADMIN_LOGIN, ADMIN_PASSWORD) ----
@@ -235,8 +240,9 @@ export function checkAdminCredentials(login: string, password: string) {
 
 // ---- So'rov ma'lumotlari ----
 export function clientIp(req: Req) {
-  const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
-  return (fwd || String(req.headers['x-real-ip'] ?? '') || '').slice(0, 64);
+  // Vercel bu sarlavhalarni o'zi qo'yadi (mijoz yuborganini almashtiradi)
+  const h = (k: string) => String(req.headers[k] ?? '').split(',')[0].trim();
+  return (h('x-vercel-forwarded-for') || h('x-real-ip') || h('x-forwarded-for')).slice(0, 64);
 }
 export const clientAgent = (req: Req) => String(req.headers['user-agent'] ?? '').slice(0, 300);
 
@@ -264,18 +270,20 @@ export async function clearFailures(keys: string[]) {
 export interface UserRow { id: number; login: string; name: string; role: string; blocked: boolean }
 
 export async function currentUser(req: Req): Promise<UserRow> {
-  const uid = readToken(bearer(req));
+  const token = bearer(req);
+  const uid = readToken(token);
   if (!uid) throw new HttpError(401, 'Tizimga kiring');
   const s = await db();
-  const [u] = await s<UserRow[]>`update users set last_seen = now() where id = ${uid} returning id, login, name, role, blocked`;
+  const [u] = await s<(UserRow & { token_ver: number })[]>`update users set last_seen = now() where id = ${uid} returning id, login, name, role, blocked, token_ver`;
   if (!u) throw new HttpError(401, 'Foydalanuvchi topilmadi');
+  if (u.token_ver !== tokenVer(token)) throw new HttpError(401, 'Sessiya tugagan, qayta kiring');
   if (u.blocked) throw new HttpError(403, 'Hisob bloklangan');
   return u;
 }
 
 export async function requireAdmin(req: Req) {
   const p = readPayload(bearer(req));
-  if (!p?.adm || !adminConfigured()) throw new HttpError(401, 'Administrator sifatida kiring');
+  if (!p?.adm || !adminConfigured() || p.k !== adminKey()) throw new HttpError(401, 'Administrator sifatida kiring');
   await db();
 }
 

@@ -212,6 +212,46 @@ describe.skipIf(!enabled)('server API', () => {
     expect((await call('/school?action=rating', { token: b.data.token })).data.me.name).toBe('Bek A.');
   });
 
+  it("parol almashtirilsa eski tokenlar bekor bo'ladi, yangi token ishlaydi", async () => {
+    const r = await call('/auth?action=register', { body: { login: 'pw' + suffix, password: 'eski-parol', name: 'Pw' } });
+    const old = r.data.token;
+    const other = (await call('/auth?action=login', { body: { login: 'pw' + suffix, password: 'eski-parol' } })).data.token;
+    for (let i = 0; i < 5; i++) expect((await call('/auth?action=password', { body: { password: 'xato-' + i, newPassword: 'yangi-parol' }, token: old })).status).toBe(401);
+    expect((await call('/auth?action=password', { body: { password: 'eski-parol', newPassword: 'yangi-parol' }, token: old })).status).toBe(429);
+    const { default: postgres } = await import('postgres');
+    const sql = postgres(process.env.DATABASE_URL!, { onnotice: () => {} });
+    await sql`delete from auth_failures where key like 'pw:%'`;
+    await sql.end();
+    const ch = await call('/auth?action=password', { body: { password: 'eski-parol', newPassword: 'yangi-parol' }, token: old });
+    expect(ch.status).toBe(200);
+    expect((await call('/auth?action=me', { token: old })).status).toBe(401);
+    expect((await call('/auth?action=me', { token: other })).status).toBe(401);
+    expect((await call('/auth?action=me', { token: ch.data.token })).status).toBe(200);
+    const again = await call('/auth?action=login', { body: { login: 'pw' + suffix, password: 'yangi-parol' } });
+    expect((await call('/auth?action=me', { token: again.data.token })).status).toBe(200);
+  });
+
+  it("bitta hisobga turli IP lardan ko'p urinishda hisob vaqtincha qulflanadi", async () => {
+    await call('/auth?action=register', { body: { login: 'acc' + suffix, password: 'secret12', name: 'Acc' } });
+    for (let i = 0; i < 20; i++) await call('/auth?action=login', { body: { login: 'acc' + suffix, password: 'xato' + i }, ip: `10.50.0.${i}` });
+    expect((await call('/auth?action=login', { body: { login: 'acc' + suffix, password: 'secret12' }, ip: '10.60.0.1' })).status).toBe(429);
+  });
+
+  it("guruh kodini tanlab topishga urinish cheklanadi", async () => {
+    const r = await call('/auth?action=register', { body: { login: 'kod' + suffix, password: 'secret12', name: 'Kod' } });
+    for (let i = 0; i < 10; i++) expect((await call('/school?action=join', { body: { code: 'ZZZZZ' + i }, token: r.data.token })).status).toBe(404);
+    expect((await call('/school?action=join', { body: { code: 'ZZZZZZ' }, token: r.data.token })).status).toBe(429);
+  });
+
+  it("ADMIN_PASSWORD almashtirilsa eski admin tokeni ishlamaydi", async () => {
+    const tok = (await call('/auth?action=admin-login', { body: { login: 'boshliq', password: 'Admin-parol-2026' }, ip: '10.8.8.8' })).data.token;
+    expect((await call('/admin?action=users', { token: tok })).status).toBe(200);
+    process.env.ADMIN_PASSWORD = 'Boshqa-parol-2026';
+    expect((await call('/admin?action=users', { token: tok })).status).toBe(401);
+    process.env.ADMIN_PASSWORD = 'Admin-parol-2026';
+    expect((await call('/admin?action=users', { token: tok })).status).toBe(200);
+  });
+
   it('bloklangan foydalanuvchi kira olmaydi', async () => {
     const users = (await call('/admin?action=users', { token: adminToken })).data.users;
     const ali = users.find((u: any) => u.login === 'ali' + suffix);

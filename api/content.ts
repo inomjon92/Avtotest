@@ -1,5 +1,5 @@
 // Umumiy kontent: admin tahrirlagan savollar, imtihon sozlamalari va xato xabarlari.
-import { currentUser, db, handler, HttpError, q, readToken, requireAdmin } from './_lib.js';
+import { assertNotLocked, clientIp, currentUser, db, handler, HttpError, q, readToken, recordFailure, requireAdmin } from './_lib.js';
 
 const MAX_BYTES = 8_000_000;
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
@@ -68,6 +68,11 @@ export default handler(async (req) => {
     if (uid) {
       const [{ n }] = await s`select count(*)::int as n from reports where user_id = ${uid} and at > now() - interval '1 day'`;
       if (n >= 30) throw new HttpError(429, "Bir kunda 30 tadan ortiq xabar yuborib bo'lmaydi");
+    } else {
+      // Mehmonlar uchun IP bo'yicha: 15 daqiqada 10 ta xabar
+      const key = [`report:${clientIp(req)}`];
+      await assertNotLocked(key, [10]);
+      await recordFailure(key);
     }
     await s`insert into reports (user_id, qid, reason, comment, image, proposal)
       values (${uid}, ${String(qid).slice(0, 64)}, ${String(reason).slice(0, 100)}, ${comment.slice(0, 1000)}, ${image}, ${proposal ? s.json(proposal) : null})`;

@@ -51,9 +51,10 @@ export default handler(async (req) => {
   }
 
   if (action === 'login') {
-    const keys = [`login:${ip}:${login}`, `ip:${ip}`];
-    await assertNotLocked(keys, [5, 30]);
-    const [u] = await s<(UserRow & { pass_hash: string })[]>`select id, login, name, role, blocked, pass_hash from users where login = ${login}`;
+    // IP+login: 5, butun IP: 30, bitta hisobga turli IP lardan: 20 (botnet bilan parol tanlashga qarshi)
+    const keys = [`login:${ip}:${login}`, `ip:${ip}`, `acct:${login}`];
+    await assertNotLocked(keys, [5, 30, 20]);
+    const [u] = await s<(UserRow & { pass_hash: string; token_ver: number })[]>`select id, login, name, role, blocked, pass_hash, token_ver from users where login = ${login}`;
     if (!u || !verifyPassword(password, u.pass_hash)) {
       await recordFailure(keys);
       throw new HttpError(401, "Login yoki parol noto'g'ri");
@@ -62,13 +63,14 @@ export default handler(async (req) => {
     await clearFailures([keys[0]]);
     await s`update users set last_seen = now(), login_count = login_count + 1, last_ip = ${ip}, last_agent = ${agent} where id = ${u.id}`;
     await s`insert into logins (user_id, kind, agent, ip) values (${u.id}, 'login', ${agent}, ${ip})`;
-    return { token: signToken(u.id), user: publicUser(u) };
+    return { token: signToken(u.id, u.token_ver), user: publicUser(u) };
   }
 
   if (action === 'admin-login') {
     if (!adminConfigured()) throw new HttpError(503, "Admin hisobi sozlanmagan (Vercel'da ADMIN_LOGIN va ADMIN_PASSWORD kiriting)");
     const keys = [`admin:${ip}`, 'admin:all'];
-    await assertNotLocked([keys[0]]);
+    // Bitta IP: 5; hammasi bo'lib (turli IP lardan): 50 — kuchli parol bilan ham qo'shimcha to'siq
+    await assertNotLocked(keys, [5, 50]);
     const ok = checkAdminCredentials(login, password);
     await s`insert into admin_logins (ip, agent, ok) values (${ip}, ${agent}, ${ok})`;
     if (!ok) {
@@ -82,11 +84,18 @@ export default handler(async (req) => {
   if (action === 'password') {
     const u = await currentUser(req);
     const next = String(req.body?.newPassword ?? '');
+    const fkey = [`pw:${u.id}`];
+    await assertNotLocked(fkey);
     const [row] = await s<{ pass_hash: string }[]>`select pass_hash from users where id = ${u.id}`;
-    if (!verifyPassword(password, row.pass_hash)) throw new HttpError(401, "Joriy parol noto'g'ri");
+    if (!verifyPassword(password, row.pass_hash)) {
+      await recordFailure(fkey);
+      throw new HttpError(401, "Joriy parol noto'g'ri");
+    }
     checkPassword(next);
-    await s`update users set pass_hash = ${hashPassword(next)} where id = ${u.id}`;
-    return { ok: true };
+    // token_ver oshadi: boshqa qurilmalardagi eski sessiyalar chiqib ketadi, shu qurilmaga yangi token beriladi
+    const [r] = await s<{ token_ver: number }[]>`update users set pass_hash = ${hashPassword(next)}, token_ver = token_ver + 1 where id = ${u.id} returning token_ver`;
+    await clearFailures(fkey);
+    return { ok: true, token: signToken(u.id, r.token_ver) };
   }
 
   throw new HttpError(400, "Noma'lum amal");

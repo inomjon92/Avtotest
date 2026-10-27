@@ -158,6 +158,16 @@ export function useStore<T>(selector: (s: AppState) => T): T {
 export function getSession() { return session; }
 export function isGuest() { return guest; }
 
+/** Parol almashtirilgandan keyin yangi tokenni saqlash (progress qayta yuklanmaydi) */
+export function replaceSessionToken(token: string) {
+  if (!session) return;
+  session = { ...session, token };
+  try {
+    const store = localStorage.getItem(SESSION_KEY) ? localStorage : sessionStorage;
+    store.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch { /* */ }
+}
+
 export function setSession(next: Session | null, remember = true) {
   const content = { customQuestions: state.customQuestions, exam: state.exam, faq: state.faq };
   session = next;

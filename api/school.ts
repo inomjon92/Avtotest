@@ -1,6 +1,6 @@
 // Avtomaktab kabineti (o'qituvchi guruhlari, taklif kodi) va foydalanuvchilar reytingi.
 import { randomInt } from 'node:crypto';
-import { currentUser, db, handler, HttpError, q, summarize } from './_lib.js';
+import { assertNotLocked, currentUser, db, handler, HttpError, q, recordFailure, summarize } from './_lib.js';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
@@ -67,9 +67,15 @@ export default handler(async (req) => {
   }
 
   if (req.method === 'POST' && action === 'join') {
-    const code = String(req.body?.code ?? '').trim().toUpperCase();
+    const code = String(req.body?.code ?? '').trim().toUpperCase().slice(0, 16);
+    // Kodlarni tanlab topishga qarshi: 15 daqiqada 10 ta noto'g'ri kod
+    const fkey = [`join:${user.id}`];
+    await assertNotLocked(fkey, [10]);
     const [g] = await s`select id, name, teacher_id from groups where code = ${code}`;
-    if (!g) throw new HttpError(404, "Bunday kodli guruh topilmadi");
+    if (!g) {
+      await recordFailure(fkey);
+      throw new HttpError(404, "Bunday kodli guruh topilmadi");
+    }
     if (g.teacher_id === user.id) throw new HttpError(400, "Bu sizning guruhingiz");
     const [{ n }] = await s`select count(*)::int as n from group_members where user_id = ${user.id}`;
     if (n >= 5) throw new HttpError(400, "5 tadan ortiq guruhga qo'shilib bo'lmaydi");

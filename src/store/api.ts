@@ -5,7 +5,7 @@ import type { ExamConfig } from '../lib/exam';
 import type { FaqItem } from '../lib/chatbot';
 import { differs, mergeProgress } from '../lib/merge';
 import {
-  getSession, getState, onProgressChange, PROGRESS_KEYS, setContent, setSession, setStateQuiet,
+  getSession, getState, onProgressChange, PROGRESS_KEYS, setContent, setSession, setStateQuiet, replaceSessionToken,
   type AppState, type Session,
 } from './store';
 
@@ -80,6 +80,11 @@ export async function register(loginName: string, password: string, name: string
   setStateQuiet((s) => ({ ...s, ...(hasGuestProgress ? pickProgress(local) : {}), settings: { ...s.settings, ...local.settings, name } , updatedAt: Date.now() }));
   await pushProgress();
   return r;
+}
+
+export async function changePassword(password: string, newPassword: string) {
+  const r = await api<{ ok: boolean; token?: string }>('/auth?action=password', { body: { password, newPassword } });
+  if (r.token) replaceSessionToken(r.token);
 }
 
 export function logout() {
