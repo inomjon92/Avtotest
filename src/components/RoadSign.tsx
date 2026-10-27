@@ -1,5 +1,6 @@
 import type { RoadSign as Sign } from '../data/types';
 import { useStore } from '../store/store';
+import { mediaUrl } from '../store/api';
 
 const ARROWS: Record<string, string> = {
   'arrow-up': 'M50 18 L68 40 H57 V82 H43 V40 H32 Z',
@@ -215,7 +216,7 @@ export function RoadSign({ sign, size = 96, title, bg, drawn }: { sign: Sign; si
     return (
       <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={label} className="road-sign">
         <title>{label}</title>
-        <image href={photo} x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+         <image href={mediaUrl(photo)} x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
       </svg>
     );
   }

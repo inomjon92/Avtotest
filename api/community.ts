@@ -1,5 +1,5 @@
 // Foydalanuvchilar hissasi: savol yuborish va chat-botdan adminga savol berish.
-import { cleanImage, currentUser, db, handler, HttpError, q } from './_lib.js';
+import { cleanImage, currentUser, IMG_URL_RE, storeImage, db, handler, HttpError, q } from './_lib.js';
 
 const TOPICS = ['umumiy', 'belgilar', 'chiziqlar', 'svetofor', 'chorraha', 'manevr', 'tezlik', 'quvib', 'toxtash', 'piyoda', 'temiryol', 'chiroqlar', 'xavfsizlik', 'yordam'];
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
@@ -13,7 +13,7 @@ export function cleanQuestion(raw: any) {
   const correct = Number(raw?.correct);
   if (!Number.isInteger(correct) || correct < 0 || correct >= options.length) throw new HttpError(400, "To'g'ri javobni belgilang");
   const topic = TOPICS.includes(raw?.topic) ? raw.topic : 'umumiy';
-  const image = cleanImage(raw?.image) ?? undefined;
+  const image = typeof raw?.image === 'string' && IMG_URL_RE.test(raw.image) ? raw.image : cleanImage(raw?.image) ?? undefined;
   if (raw?.image && !image) throw new HttpError(400, "Rasm faqat JPEG, PNG yoki WebP bo'lishi kerak (1 MB gacha)");
   return { text, options, correct, topic, explanation: str(raw?.explanation, 1000), image };
 }
@@ -30,6 +30,7 @@ export default handler(async (req) => {
 
   if (req.method === 'POST' && action === 'submit') {
     const question = cleanQuestion(req.body?.question);
+    question.image = await storeImage(question.image);
     const [{ pending, today }] = await s`
       select count(*) filter (where status = 'pending')::int as pending,
              count(*) filter (where created_at > now() - interval '1 day')::int as today

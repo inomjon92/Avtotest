@@ -31,7 +31,7 @@ export function startApiServer(port: number) {
       status(c) { code = c; return r; },
       json(b) { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(b)); },
       setHeader(k, v) { res.setHeader(k, v); },
-      end() { res.statusCode = code; res.end(); },
+      end(data?: Buffer) { res.statusCode = code; res.end(data); },
     };
     await mod.default({ method: req.method, headers: req.headers, body: await readBody(req), query: Object.fromEntries(url.searchParams) }, r);
   });

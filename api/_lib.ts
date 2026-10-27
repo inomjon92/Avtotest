@@ -62,6 +62,13 @@ async function migrate(s: Sql) {
     at timestamptz not null default now()
   )`;
   await s`create index if not exists auth_failures_key_at on auth_failures (key, at)`;
+  // Rasmlar alohida saqlanadi (savollar/belgilar JSON ida faqat havola) — so'rovlar hajmi kichik bo'lib qoladi
+  await s`create table if not exists images (
+    id text primary key,
+    mime text not null,
+    data bytea not null,
+    created_at timestamptz not null default now()
+  )`;
   await s`create table if not exists admin_logins (
     id bigserial primary key,
     at timestamptz not null default now(),
@@ -179,6 +186,28 @@ export function cleanImage(v: unknown, maxBytes = 1_000_000): string | null {
     : head.subarray(0, 4).toString() === 'RIFF' && head.subarray(8, 12).toString() === 'WEBP';
   return ok ? v : null;
 }
+
+/** Saqlangan rasm havolasi: /api/content?action=img&id=... */
+export const IMG_URL_RE = /^\/api\/content\?action=img&id=[A-Za-z0-9_-]{8,40}$/;
+
+/**
+ * Rasmni images jadvaliga yozib, havolasini qaytaradi. Allaqachon saqlangan rasm havolasi o'zgarishsiz qaytadi.
+ * Rasm bo'lmasa undefined; noto'g'ri format bo'lsa xato.
+ */
+export async function storeImage(v: unknown, maxBytes = 1_000_000): Promise<string | undefined> {
+  if (v === undefined || v === null || v === '') return undefined;
+  if (typeof v === 'string' && IMG_URL_RE.test(v)) return v;
+  const clean = cleanImage(v, maxBytes);
+  if (!clean) throw new HttpError(400, "Rasm faqat JPEG, PNG yoki WebP bo'lishi kerak (1 MB gacha)");
+  const [, mime, b64] = /^data:(image\/\w+);base64,(.+)$/.exec(clean)!;
+  const id = randomBytes(12).toString('base64url');
+  const s = await db();
+  await s`insert into images (id, mime, data) values (${id}, ${mime}, ${Buffer.from(b64, 'base64')})`;
+  return `/api/content?action=img&id=${id}`;
+}
+
+/** Javobni handler o'zi yozib bo'lganini bildiradi (masalan, rasm yuborilganda) */
+export const HANDLED = Symbol('handled');
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -305,7 +334,7 @@ export async function requireAdmin(req: Req) {
 
 // ---- HTTP ----
 export interface Req { method?: string; headers: Record<string, string | string[] | undefined>; body?: any; query?: Record<string, string | string[]> }
-export interface Res { status(code: number): Res; json(body: unknown): void; setHeader(k: string, v: string): void; end(): void }
+export interface Res { status(code: number): Res; json(body: unknown): void; setHeader(k: string, v: string): void; end(data?: Buffer): void }
 
 export function handler(fn: (req: Req, res: Res) => Promise<unknown>) {
   return async (req: Req, res: Res) => {
@@ -318,6 +347,7 @@ export function handler(fn: (req: Req, res: Res) => Promise<unknown>) {
     try {
       if (typeof req.body === 'string' && req.body) req.body = JSON.parse(req.body);
       const out = await fn(req, res);
+      if (out === HANDLED) return;
       res.status(200).json(out ?? { ok: true });
     } catch (e) {
       if (e instanceof HttpError) return res.status(e.status).json({ error: e.message });

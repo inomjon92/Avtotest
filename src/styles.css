@@ -353,3 +353,5 @@ label.check { display: flex; align-items: center; gap: 8px; margin: 8px 0; curso
 .bottom-nav a span:first-child { transition: transform .15s ease; }
 @media (min-width: 900px) { .bottom-nav { max-width: 600px; margin: 0 auto; border: 1px solid var(--border); border-radius: 22px; } }
 .contact-link { border-style: solid; border-color: color-mix(in srgb, #229ed9 45%, var(--border)); }
+.img-actions { margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); display: grid; gap: 6px; }
+.img-actions select { max-width: 220px; }

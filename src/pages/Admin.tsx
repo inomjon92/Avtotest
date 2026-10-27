@@ -8,7 +8,7 @@ import { SIGNS, signById } from '../data/signs';
 import { questionsFromCSV, toCSV } from '../lib/csv';
 import type { ExamConfig } from '../lib/exam';
 import { allQuestions, getState, recordVersion, useStore } from '../store/store';
-import { adminLogin, api, getAdminToken, saveContentQuestions, saveExamConfig, saveSignImage, setAdminToken, subscribeAdmin } from '../store/api';
+import { adminLogin, api, getAdminToken, mediaUrl, saveContentQuestions, saveExamConfig, saveSignImage, setAdminToken, subscribeAdmin } from '../store/api';
 import { QuestionMedia } from './Quiz';
 import { download } from './Settings';
 import { IMAGE_ACCEPT, IMAGE_FORMATS, resizeImage } from '../lib/image';
@@ -370,6 +370,8 @@ function LoginsTab() {
 
 // ---------- Savollar ----------
 
+const blank = (): Question => ({ id: 'n' + Date.now().toString(36), topic: TOPICS[0].id, text: '', options: ['', ''], correct: 0, explanation: '', status: 'draft', version: 0, difficulty: 2 });
+
 async function persistQuestion(q: Question) {
   const s = getState();
   const prev = s.customQuestions[q.id] ?? allQuestions(s).find((x) => x.id === q.id);
@@ -386,7 +388,6 @@ function QuestionsTab() {
   const [topic, setTopic] = useState('');
   const [edit, setEdit] = useState<Question | null>(null);
   const list = all.filter((x) => (!status || x.status === status) && (!topic || x.topic === topic) && (!q || (x.id + ' ' + x.text).toLowerCase().includes(q.toLowerCase())));
-  const blank = (): Question => ({ id: 'n' + Date.now().toString(36), topic: TOPICS[0].id, text: '', options: ['', ''], correct: 0, explanation: '', status: 'draft', version: 0, difficulty: 2 });
   return (
     <>
       <div className="row-wrap">
@@ -594,7 +595,7 @@ function SignReportInfo({ r, onAccepted }: { r: ReportRow; onAccepted: () => voi
       <p className="small">🚸 <b>{sign.code}</b> {sign.name} {current && <span className="badge">rasm almashtirilgan</span>}</p>
       <div className="sign-compare">
         <figure><RoadSign sign={sign} size={90} /><figcaption className="tiny muted">Hozirgi</figcaption></figure>
-        {r.image && <figure><a href={r.image} target="_blank" rel="noreferrer"><img src={r.image} alt="Foydalanuvchi yuborgan belgi" /></a><figcaption className="tiny muted">Foydalanuvchi yuborgan</figcaption></figure>}
+        {r.image && <figure><img src={mediaUrl(r.image)} alt="Foydalanuvchi yuborgan belgi" /><figcaption className="tiny muted">Foydalanuvchi yuborgan</figcaption></figure>}
       </div>
       <div className="row-wrap">
         {r.image && <button className="btn small" onClick={async () => {
@@ -605,6 +606,36 @@ function SignReportInfo({ r, onAccepted }: { r: ReportRow; onAccepted: () => voi
       </div>
       {msg && <p className="bad-text small">{msg}</p>}
     </>
+  );
+}
+
+/** Xabardagi rasmni ishlatish: savol rasmi, yangi savol yoki yo'l belgisi rasmi qilish */
+function ReportImageActions({ r, q, onQuestion, onSign }: { r: ReportRow; q?: Question; onQuestion: (q: Question) => void; onSign: () => void }) {
+  const [signId, setSignId] = useState(r.qid.startsWith('sign:') ? '' : (q?.sign ?? ''));
+  const [msg, setMsg] = useState('');
+  const isSign = r.qid.startsWith('sign:');
+  return (
+    <div className="img-actions">
+      <span className="tiny muted">🖼 Yuborilgan rasm bilan:</span>
+      <div className="row-wrap">
+        {q && <button className="btn ghost small" onClick={() => onQuestion({ ...q, image: r.image! })}>Shu savol rasmi qilish</button>}
+        <button className="btn ghost small" onClick={() => onQuestion({ ...blank(), image: r.image!, topic: isSign ? 'belgilar' : q?.topic ?? TOPICS[0].id })}>➕ Rasmdan yangi savol</button>
+        {!isSign && (
+          <span className="row-wrap">
+            <select value={signId} onChange={(e) => setSignId(e.target.value)} aria-label="Belgi">
+              <option value="">Belgini tanlang…</option>
+              {SIGNS.map((x) => <option key={x.id} value={x.id}>{x.code} {x.name}</option>)}
+            </select>
+            <button className="btn ghost small" disabled={!signId} onClick={async () => {
+              const sg = signById(signId);
+              if (!sg || !confirm(`${sg.code} belgisi hamma uchun shu rasm bilan almashtirilsinmi?`)) return;
+              try { await saveSignImage(signId, r.image!); setMsg(`✓ ${sg.code} belgisi almashtirildi`); onSign(); } catch (e) { setMsg(e instanceof Error ? e.message : 'Xatolik'); }
+            }}>🚸 Belgi rasmi qilish</button>
+          </span>
+        )}
+      </div>
+      {msg && <p className="small">{msg}</p>}
+    </div>
   );
 }
 
@@ -630,13 +661,20 @@ function ReportsTab({ onChange }: { onChange: () => void }) {
             <p className="small"><span className="mono muted">{r.qid}</span> · {byId.get(r.qid)?.text ?? "savol topilmadi (o'chirilgan bo'lishi mumkin)"}</p>
           )}
           {r.comment && <p className="muted small">“{r.comment}”</p>}
-          {r.image && !r.qid.startsWith('sign:') && <a href={r.image} target="_blank" rel="noreferrer"><img src={r.image} alt="Foydalanuvchi rasmi" className="report-img" /></a>}
+          {r.image && !r.qid.startsWith('sign:') && <img src={mediaUrl(r.image)} alt="Foydalanuvchi rasmi" className="report-img" />}
           {r.proposal && byId.get(r.qid) && <ProposalDiff q={byId.get(r.qid)!} p={r.proposal} />}
           <div className="row-wrap">
             {r.proposal && byId.get(r.qid) && <button className="btn small" onClick={() => setFix({ q: { ...byId.get(r.qid)!, ...r.proposal! }, report: r.id })}>✓ Taklifni ko'rib qabul qilish</button>}
             {byId.get(r.qid) && <button className={'btn small' + (r.proposal ? ' ghost' : '')} onClick={() => setFix({ q: byId.get(r.qid)!, report: r.id })}>✏️ Savolni tuzatish</button>}
             <button className="btn ghost small" onClick={() => setStatus(r.id, r.status === 'new' ? 'resolved' : 'new')}>{r.status === 'new' ? '✓ Hal qilindi' : 'Qayta ochish'}</button>
           </div>
+          {r.image && (
+            <ReportImageActions
+              r={r} q={byId.get(r.qid)}
+              onQuestion={(q) => setFix({ q, report: r.id })}
+              onSign={() => setStatus(r.id, 'resolved')}
+            />
+          )}
         </div>
       ))}
       {fix && <QuestionEditor initial={fix.q} onClose={() => setFix(null)} onSaved={() => setStatus(fix.report, 'resolved')} />}
@@ -773,7 +811,7 @@ function SubmissionsTab({ onChange }: { onChange: () => void }) {
           <div className="row-wrap"><span className={'status ' + (x.status === 'pending' ? 'review' : x.status === 'approved' ? 'published' : 'archived')}>{LABEL[x.status]}</span>
             <span className="muted small">{fmtDate(x.created_at)} · {x.name} @{x.login} · {topicById(x.question.topic)?.name}</span></div>
           <b>{x.question.text}</b>
-          {x.question.image && <div><img src={x.question.image} alt="" className="q-img" style={{ maxHeight: 120 }} /></div>}
+          {x.question.image && <div><img src={mediaUrl(x.question.image)} alt="" className="q-img" style={{ maxHeight: 120 }} /></div>}
           <ol className="small">{x.question.options.map((o, i) => <li key={i} className={i === x.question.correct ? 'good-text' : ''}>{o}{i === x.question.correct && ' ✓'}</li>)}</ol>
           {x.question.explanation && <p className="muted small">Izoh: {x.question.explanation}</p>}
           {x.note && <p className="small"><b>Sizning izohingiz:</b> {x.note}</p>}

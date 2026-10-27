@@ -7,7 +7,7 @@ import { SIGNS, SIGN_GROUPS } from '../data/signs';
 import { DOCUMENTS, EXAM_TIPS, FINES } from '../data/extra';
 import type { RoadSign as Sign } from '../data/types';
 import { addLocalReport, markRuleRead, publishedQuestions, useStore } from '../store/store';
-import { ApiError, getAdminToken, saveSignImage, sendReport } from '../store/api';
+import { ApiError, getAdminToken, mediaUrl, saveSignImage, sendReport } from '../store/api';
 import { IMAGE_ACCEPT, IMAGE_FORMATS, resizeImage } from '../lib/image';
 import { useT } from '../store/i18n';
 
@@ -217,7 +217,7 @@ function SignReportModal({ sign, onClose }: { sign: Sign | null; onClose: () => 
         <form className="form" onSubmit={submit}>
           <div className="sign-compare">
             <figure><RoadSign sign={sign} size={90} /><figcaption className="tiny muted">Hozirgi</figcaption></figure>
-            <figure>{image ? <img src={image} alt="Yuklangan belgi" /> : <div className="sign-empty">?</div>}<figcaption className="tiny muted">Siz yuborgan</figcaption></figure>
+            <figure>{image ? <img src={mediaUrl(image)} alt="Yuklangan belgi" /> : <div className="sign-empty">?</div>}<figcaption className="tiny muted">Siz yuborgan</figcaption></figure>
           </div>
           <div className="radio-list">
             {SIGN_REASONS.map((r) => <label key={r}><input type="radio" name="sreason" checked={reason === r} onChange={() => setReason(r)} /> {r}</label>)}

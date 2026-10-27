@@ -1,5 +1,5 @@
 // Umumiy kontent: admin tahrirlagan savollar, imtihon sozlamalari va xato xabarlari.
-import { assertNotLocked, cleanImage, clientIp, currentUser, db, handler, HttpError, q, readToken, recordFailure, requireAdmin } from './_lib.js';
+import { assertNotLocked, cleanImage, clientIp, HANDLED, storeImage, currentUser, db, handler, HttpError, q, readToken, recordFailure, requireAdmin } from './_lib.js';
 
 const MAX_BYTES = 8_000_000;
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
@@ -13,7 +13,7 @@ function cleanProposal(raw: any) {
   return { text, options, correct, explanation: str(raw?.explanation, 1000) };
 }
 
-export default handler(async (req) => {
+export default handler(async (req, res) => {
   const s = await db();
   const action = q(req, 'action');
 
@@ -30,14 +30,28 @@ export default handler(async (req) => {
     };
   }
 
+  // Saqlangan rasmni berish (savol, belgi va xabar rasmlari). Id tasodifiy, kesh uzoq muddatli
+  if (req.method === 'GET' && action === 'img') {
+    const [img] = await s<{ mime: string; data: Buffer }[]>`select mime, data from images where id = ${q(req, 'id') ?? ''}`;
+    if (!img) throw new HttpError(404, 'Rasm topilmadi');
+    res.setHeader('Content-Type', img.mime);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.status(200).end(img.data);
+    return HANDLED;
+  }
+
   if (req.method === 'PUT' && action === 'questions') {
     await requireAdmin(req);
     const questions = req.body?.questions;
     if (!questions || typeof questions !== 'object') throw new HttpError(400, "Savollar yo'q");
+    // Yangi yuklangan rasmlar (data URL) alohida saqlanib, savolda faqat havola qoladi
+    for (const qq of Object.values(questions) as any[]) {
+      if (qq && typeof qq === 'object' && qq.image) qq.image = await storeImage(qq.image);
+    }
     if (JSON.stringify(questions).length > MAX_BYTES) throw new HttpError(413, 'Savollar hajmi juda katta (rasmlarni kichraytiring)');
     await s`insert into settings (key, value) values ('questions', ${s.json(questions)})
             on conflict (key) do update set value = excluded.value, updated_at = now()`;
-    return { ok: true };
+    return { ok: true, questions };
   }
 
   if (req.method === 'PUT' && action === 'exam') {
@@ -54,14 +68,14 @@ export default handler(async (req) => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpError(400, "Noto'g'ri ma'lumot");
     const signs: Record<string, string> = {};
     for (const [id, img] of Object.entries(raw)) {
-      const clean = cleanImage(img, 400_000);
-      if (!/^[\w.-]{1,40}$/.test(id) || !clean) throw new HttpError(400, `Belgi rasmi noto'g'ri: ${id.slice(0, 40)}`);
-      signs[id] = clean;
+      if (!/^[\w.-]{1,40}$/.test(id)) throw new HttpError(400, `Belgi noto'g'ri: ${id.slice(0, 40)}`);
+      const url = await storeImage(img);
+      if (url) signs[id] = url;
     }
     if (JSON.stringify(signs).length > MAX_BYTES) throw new HttpError(413, 'Belgi rasmlari hajmi juda katta');
     await s`insert into settings (key, value) values ('signs', ${s.json(signs)})
             on conflict (key) do update set value = excluded.value, updated_at = now()`;
-    return { ok: true };
+    return { ok: true, signs };
   }
 
   if (req.method === 'PUT' && action === 'faq') {
@@ -81,10 +95,10 @@ export default handler(async (req) => {
     if (!qid || !reason) throw new HttpError(400, "Xatolik sababini tanlang");
     // Tuzatish taklifi (savol matni, variantlar, to'g'ri javob) — ixtiyoriy
     const proposal = req.body?.proposal ? cleanProposal(req.body.proposal) : null;
-    const image = cleanImage(req.body?.image);
-    if (req.body?.image && !image) throw new HttpError(400, "Rasm faqat JPEG, PNG yoki WebP bo'lishi kerak (1 MB gacha)");
+    const rawImage = req.body?.image;
+    if (rawImage && !cleanImage(rawImage)) throw new HttpError(400, "Rasm faqat JPEG, PNG yoki WebP bo'lishi kerak (1 MB gacha)");
     if (String(qid).startsWith('sign:')) {
-      if (!image && comment.length < 5) throw new HttpError(400, "Belgining to'g'ri rasmini biriktiring yoki nima xatoligini yozing");
+      if (!rawImage && comment.length < 5) throw new HttpError(400, "Belgining to'g'ri rasmini biriktiring yoki nima xatoligini yozing");
     } else if (comment.length < 5 && !proposal) throw new HttpError(400, "Xatolik sababini yozing (kamida 5 belgi) yoki savolni tuzatib yuboring");
     if (uid) {
       const [{ n }] = await s`select count(*)::int as n from reports where user_id = ${uid} and at > now() - interval '1 day'`;
@@ -95,6 +109,7 @@ export default handler(async (req) => {
       await assertNotLocked(key, [10]);
       await recordFailure(key);
     }
+    const image = (await storeImage(rawImage)) ?? null;
     await s`insert into reports (user_id, qid, reason, comment, image, proposal)
       values (${uid}, ${String(qid).slice(0, 64)}, ${String(reason).slice(0, 100)}, ${comment.slice(0, 1000)}, ${image}, ${proposal ? s.json(proposal) : null})`;
     return { ok: true };

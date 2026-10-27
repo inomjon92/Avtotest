@@ -12,6 +12,8 @@ import {
 const envBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 /** Veb-versiyada API shu saytning o'zida; Android ilovada VITE_API_URL orqali beriladi. */
 export const API_BASE = envBase;
+/** Serverda saqlangan rasm havolasi (/api/...) Android ilovada to'liq manzilga aylantiriladi */
+export const mediaUrl = (u?: string | null) => (u && u.startsWith('/api/') ? envBase + u : u ?? undefined);
 export const apiAvailable = () => !!envBase || !Capacitor.isNativePlatform();
 
 export class ApiError extends Error {
@@ -86,8 +88,8 @@ export async function register(loginName: string, password: string, name: string
 export async function saveSignImage(id: string, img?: string) {
   const signs = { ...getState().signImages };
   if (img) signs[id] = img; else delete signs[id];
-  await api('/content?action=signs', { method: 'PUT', body: { signs }, admin: true });
-  setSignImages(signs);
+  const r = await api<{ signs?: Record<string, string> }>('/content?action=signs', { method: 'PUT', body: { signs }, admin: true });
+  setSignImages(r.signs ?? signs);
 }
 
 export async function changePassword(password: string, newPassword: string) {
@@ -188,8 +190,9 @@ export async function loadContent() {
 }
 
 export async function saveContentQuestions(questions: Record<string, Question>) {
-  await api('/content?action=questions', { method: 'PUT', body: { questions }, admin: true });
-  setContent(questions);
+  // Server yangi rasmlarni alohida saqlab, savollarni havolalar bilan qaytaradi
+  const r = await api<{ questions?: Record<string, Question> }>('/content?action=questions', { method: 'PUT', body: { questions }, admin: true });
+  setContent(r.questions ?? questions);
 }
 
 export async function saveExamConfig(exam: ExamConfig) {

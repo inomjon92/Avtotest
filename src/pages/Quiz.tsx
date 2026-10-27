@@ -16,7 +16,7 @@ import {
   type AppState, type Attempt, type Mode,
 } from '../store/store';
 import { useT } from '../store/i18n';
-import { ApiError, sendReport } from '../store/api';
+import { ApiError, mediaUrl, sendReport } from '../store/api';
 import { IMAGE_ACCEPT, IMAGE_FORMATS, resizeImage } from '../lib/image';
 import { mixedQuestions, topicScores, weakPractice, weakTopics } from '../lib/analysis';
 
@@ -402,8 +402,9 @@ function Result({ attempt, questions, answers, isExam, onRestart }: { attempt: A
 
 export function QuestionMedia({ q, size }: { q: Question; size: number }) {
   const sign = signById(q.sign);
+  // Admin yuklagan rasm chizmadan ustun turadi
+  if (q.image) return <img src={mediaUrl(q.image)} alt="" className="q-img" style={{ maxHeight: size * 1.8 }} />;
   if (q.scene) return <Scene scene={q.scene} size={size * 1.6} />;
-  if (q.image) return <img src={q.image} alt="" className="q-img" style={{ maxHeight: size * 1.8 }} />;
   if (q.art) return <Art name={q.art} size={size * 1.8} />;
   if (sign) return <RoadSign sign={sign} size={size} />;
   return <div className="q-placeholder" style={{ fontSize: size / 3 }}>{topicById(q.topic)?.icon ?? '🚗'}</div>;

@@ -27,7 +27,7 @@ describe.skipIf(!enabled)('server API', () => {
     server = await startApiServer(PORT);
     const { default: postgres } = await import('postgres');
     const sql = postgres(process.env.DATABASE_URL!, { onnotice: () => {} });
-    await sql`drop table if exists logins, progress, settings, reports, auth_failures, admin_logins, submissions, messages, group_members, groups, users cascade`;
+    await sql`drop table if exists logins, progress, settings, reports, auth_failures, admin_logins, submissions, messages, group_members, groups, images, users cascade`;
     await sql.end();
   });
   afterAll(() => new Promise<void>((r) => server.close(() => r())));
@@ -105,7 +105,11 @@ describe.skipIf(!enabled)('server API', () => {
     expect((await call('/content?action=report', { body: { qid: 'q2', reason: 'Boshqa', proposal: { ...proposal, options: ['A', ''] } }, token: userToken })).status).toBe(400);
     const withFix = (await call('/admin?action=reports', { token: adminToken })).data.reports.find((x: any) => x.qid === 'q2');
     expect(withFix.proposal.correct).toBe(1);
-    expect(withFix.image).toBe(img);
+    // Rasm alohida saqlanadi, xabarda faqat havola
+    expect(withFix.image).toMatch(/^\/api\/content\?action=img&id=/);
+    const raw = await fetch(`http://localhost:${PORT}` + withFix.image);
+    expect(raw.headers.get('content-type')).toBe('image/png');
+    expect(Buffer.from(await raw.arrayBuffer()).toString('base64')).toBe('iVBORw0KGgo=');
     const r = await call('/admin?action=reports', { token: adminToken });
     expect(r.data.reports[0].login).toBe('ali' + suffix);
   });
@@ -259,11 +263,20 @@ describe.skipIf(!enabled)('server API', () => {
     expect((await call('/content?action=report', { body: { qid: 'sign:1.1', reason: "Belgi rasmi noto'g'ri", comment: '' }, token: userToken })).status).toBe(400);
     expect((await call('/content?action=report', { body: { qid: 'sign:1.1', reason: "Belgi rasmi noto'g'ri", comment: '', image: png }, token: userToken })).status).toBe(200);
     const reps = (await call('/admin?action=reports', { token: adminToken })).data.reports;
-    expect(reps.find((r: any) => r.qid === 'sign:1.1').image).toBe(png);
+    const signImg = reps.find((r: any) => r.qid === 'sign:1.1').image;
+    expect(signImg).toMatch(/^\/api\/content\?action=img&id=/);
     expect((await call('/content?action=signs', { method: 'PUT', body: { signs: { '1.1': png } }, token: userToken })).status).toBe(401);
     expect((await call('/content?action=signs', { method: 'PUT', body: { signs: { '1.1': fake } }, token: adminToken })).status).toBe(400);
     expect((await call('/content?action=signs', { method: 'PUT', body: { signs: { '1.1': png } }, token: adminToken })).status).toBe(200);
-    expect((await call('/content')).data.signs['1.1']).toBe(png);
+    expect((await call('/content')).data.signs['1.1']).toMatch(/^\/api\/content\?action=img&id=/);
+    // Xabardagi (allaqachon saqlangan) rasm havolasini belgi va savol rasmi qilish mumkin
+    const put = await call('/content?action=signs', { method: 'PUT', body: { signs: { '1.2': signImg } }, token: adminToken });
+    expect(put.data.signs['1.2']).toBe(signImg);
+    const qs = await call('/content?action=questions', { method: 'PUT', body: { questions: { nimg: { id: 'nimg', text: 'Rasmli savol', options: ['A', 'B'], correct: 0, topic: 'belgilar', status: 'draft', image: png }, nref: { id: 'nref', text: 'Havola', options: ['A', 'B'], correct: 0, topic: 'belgilar', status: 'draft', image: signImg } } }, token: adminToken });
+    expect(qs.status).toBe(200);
+    expect(qs.data.questions.nimg.image).toMatch(/^\/api\/content\?action=img&id=/);
+    expect(qs.data.questions.nref.image).toBe(signImg);
+    expect((await call('/content?action=questions', { method: 'PUT', body: { questions: { bad: { id: 'bad', text: 'x', options: ['A', 'B'], correct: 0, image: fake } } }, token: adminToken })).status).toBe(400);
   });
 
   it("admin qulflangan hisobni ochadi va yangi parol o'rnatadi", async () => {

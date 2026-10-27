@@ -1,5 +1,5 @@
 // Administrator: foydalanuvchilar, kirishlar tarixi, umumiy statistika, xato xabarlari.
-import { db, handler, hashPassword, HttpError, q, requireAdmin, summarize, type Stat } from './_lib.js';
+import { db, handler, hashPassword, storeImage, HttpError, q, requireAdmin, summarize, type Stat } from './_lib.js';
 import { cleanQuestion } from './community.js';
 
 export default handler(async (req) => {
@@ -158,6 +158,7 @@ export default handler(async (req) => {
     if (!sub) throw new HttpError(404, 'Topilmadi');
     // Admin tahrirlagan variant bo'lsa, shuni olamiz
     const question = req.body?.question ? cleanQuestion(req.body.question) : sub.question;
+    if (question.image) question.image = await storeImage(question.image);
     await s.begin(async (t: any) => {
       await t`update submissions set status = ${status}, note = ${String(note ?? '').slice(0, 500)}, question = ${t.json(question)}, reviewed_at = now() where id = ${id}`;
       const [row] = await t`select value from settings where key = 'questions' for update`;
