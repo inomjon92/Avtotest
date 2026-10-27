@@ -21,6 +21,8 @@ export default function Login() {
     setError('');
     if (mode === 'register' && form.password !== form.password2) return setError('Parollar mos emas');
     setBusy(true);
+    // Kirgandan keyin har doim bosh ekran ochilsin (oldin qaysi sahifada chiqib ketgan bo'lmasin)
+    if (location.pathname !== '/') history.replaceState(null, '', '/');
     try {
       if (mode === 'login') await login(form.login.trim(), form.password, remember);
       else await register(form.login.trim(), form.password, form.name.trim(), remember);
