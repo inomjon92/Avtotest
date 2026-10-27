@@ -1,29 +1,6 @@
 // Administrator: foydalanuvchilar, kirishlar tarixi, umumiy statistika, xato xabarlari.
-import { db, handler, HttpError, q, requireAdmin } from './_lib.js';
+import { db, handler, HttpError, q, requireAdmin, summarize, type Stat } from './_lib.js';
 import { cleanQuestion } from './community.js';
-
-interface Stat { correct: number; wrong: number; lastCorrect?: boolean; box: number }
-interface Attempt { mode: string; passed?: boolean; correct: number; total: number; finishedAt: number }
-
-function summarize(state: any) {
-  const stats: Record<string, Stat> = state?.stats ?? {};
-  const values = Object.values(stats);
-  const attempts: Attempt[] = state?.attempts ?? [];
-  const exams = attempts.filter((a) => a.mode === 'exam');
-  const answers = values.reduce((n, x) => n + x.correct + x.wrong, 0);
-  const correct = values.reduce((n, x) => n + x.correct, 0);
-  return {
-    answers,
-    accuracy: answers ? Math.round((correct / answers) * 100) : 0,
-    mastered: values.filter((x) => x.lastCorrect && x.box >= 2).length,
-    seen: values.length,
-    exams: exams.length,
-    examsPassed: exams.filter((a) => a.passed).length,
-    lastExam: exams.length ? exams[exams.length - 1] : null,
-    rulesRead: Object.keys(state?.rulesRead ?? {}).length,
-    examDate: state?.settings?.examDate || null,
-  };
-}
 
 export default handler(async (req) => {
   await requireAdmin(req);
@@ -106,8 +83,12 @@ export default handler(async (req) => {
   }
 
   if (req.method === 'POST' && action === 'update-user') {
-    const { id, blocked } = req.body ?? {};
+    const { id, blocked, role } = req.body ?? {};
     if (blocked !== undefined) await s`update users set blocked = ${!!blocked} where id = ${id}`;
+    if (role !== undefined) {
+      if (!['student', 'teacher'].includes(role)) throw new HttpError(400, "Noto'g'ri rol");
+      await s`update users set role = ${role} where id = ${id}`;
+    }
     return { ok: true };
   }
 
@@ -123,7 +104,7 @@ export default handler(async (req) => {
   }
 
   if (req.method === 'GET' && action === 'reports') {
-    const rows = await s`select r.id, r.qid, r.reason, r.comment, r.status, r.at, u.login from reports r left join users u on u.id = r.user_id order by r.at desc limit 300`;
+    const rows = await s`select r.id, r.qid, r.reason, r.comment, r.status, r.at, r.image, r.proposal, u.login, u.name from reports r left join users u on u.id = r.user_id order by r.at desc limit 300`;
     return { reports: rows };
   }
 

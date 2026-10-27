@@ -157,10 +157,19 @@ export function startSync() {
 
 // ---- Umumiy kontent ----
 
+/** Serverdagi (eng yangi) ilova versiyasi; Android ilova eski bo'lsa, yangilashni taklif qilamiz */
+let serverBuild = '';
+const buildListeners = new Set<() => void>();
+export const getServerBuild = () => serverBuild;
+export function subscribeBuild(l: () => void) { buildListeners.add(l); return () => { buildListeners.delete(l); }; }
+export const APK_URL = 'https://github.com/inomjon92/Avtotest/releases/download/apk-latest/avtotest.apk';
+
 export async function loadContent() {
   try {
-    const r = await api<{ questions: Record<string, Question>; exam: ExamConfig | null; faq: FaqItem[] | null }>('/content', { auth: false });
+    const r = await api<{ questions: Record<string, Question>; exam: ExamConfig | null; faq: FaqItem[] | null; build?: string }>('/content', { auth: false });
     setContent(r.questions ?? {}, r.exam, r.faq ?? null);
+    serverBuild = r.build ?? '';
+    buildListeners.forEach((l) => l());
   } catch { /* oflayn — saqlangan kontent bilan ishlaymiz */ }
 }
 
@@ -174,7 +183,7 @@ export async function saveExamConfig(exam: ExamConfig) {
   setContent(getState().customQuestions, exam);
 }
 
-export async function sendReport(r: { qid: string; reason: string; comment: string }) {
+export async function sendReport(r: { qid: string; reason: string; comment: string; image?: string; proposal?: { text: string; options: string[]; correct: number; explanation: string } }) {
   await api('/content?action=report', { body: r });
 }
 
@@ -194,3 +203,30 @@ export const mySubmissions = () => api<{ submissions: Submission[] }>('/communit
 export const askAdmin = (text: string) => api<{ ok: true }>('/community?action=ask', { body: { text } });
 export const myMessages = () => api<{ messages: ChatMessage[] }>('/community?action=messages').then((r) => r.messages);
 export const unreadCount = () => api<{ unread: number }>('/community?action=unread').then((r) => r.unread);
+
+// ---- Reyting va avtomaktab ----
+
+export interface RatingRow { place: number; name: string; score: number; mastered: number; accuracy: number; examsPassed: number; streak: number; me: boolean }
+export interface Rating { top: RatingRow[]; me: RatingRow | null; total: number }
+export interface MemberSummary {
+  id: number; login: string; name: string; lastSeen: string | null; joinedAt?: string; syncedAt?: string | null;
+  answers: number; accuracy: number; mastered: number; seen: number; exams: number; examsPassed: number; rulesRead: number;
+  examDate: string | null; weekAnswers: number; weekPassed: number; streak: number; score: number;
+  lastExam: { correct: number; total: number; passed?: boolean; finishedAt: number } | null;
+}
+export interface SchoolGroup { id: number; name: string; code: string; members: number; created_at: string }
+export interface JoinedGroup { id: number; name: string; teacher: string; joined_at: string }
+
+export const getRating = (period: 'week' | 'all', group?: number) => api<Rating>(`/school?action=rating&period=${period}${group ? `&group=${group}` : ''}`);
+export const mySchool = () => api<{ role: string; joined: JoinedGroup[]; groups: SchoolGroup[] }>('/school?action=mine');
+export const joinGroup = (code: string) => api<{ group: { id: number; name: string } }>('/school?action=join', { body: { code } });
+export const leaveGroup = (id: number) => api('/school?action=leave', { body: { id } });
+export const createGroup = (name: string) => api<{ group: SchoolGroup }>('/school?action=create', { body: { name } });
+export const updateGroup = (id: number, patch: { name?: string; newCode?: boolean }) => api<{ code?: string }>('/school?action=update', { body: { id, ...patch } });
+export const deleteGroup = (id: number) => api('/school?action=delete', { body: { id } });
+export const kickMember = (id: number, user: number) => api('/school?action=kick', { body: { id, user } });
+export const groupDetail = (id: number) => api<{ group: { id: number; name: string; code: string }; members: MemberSummary[] }>(`/school?action=group&id=${id}`);
+export const memberDetail = (id: number, user: number) => api<{
+  member: MemberSummary; stats: Record<string, import('../lib/srs').QStat>; activity: Record<string, number>;
+  attempts: { title: string; mode: string; correct: number; total: number; passed?: boolean; finishedAt: number }[];
+}>(`/school?action=member&id=${id}&user=${user}`);

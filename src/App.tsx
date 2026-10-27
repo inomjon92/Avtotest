@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import Home from './pages/Home';
 import Tests from './pages/Tests';
@@ -11,8 +12,10 @@ import { Documents, Fines, GuideHome, RuleDetail, RulesList, SignsCatalog, Tips 
 import Login from './pages/Login';
 import Chat from './pages/Chat';
 import Submit from './pages/Submit';
+import Rating from './pages/Rating';
+import School from './pages/School';
 import { useGuest, useSession, useStore } from './store/store';
-import { loadContent, refreshMe, startSync, syncNow } from './store/api';
+import { APK_URL, getServerBuild, loadContent, refreshMe, startSync, subscribeBuild, syncNow } from './store/api';
 import { useT } from './store/i18n';
 
 function useAppearance() {
@@ -72,6 +75,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollTop />
+      <UpdateBanner />
       <AppMain>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -88,6 +92,8 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/submit" element={<Submit />} />
+          <Route path="/rating" element={<Rating />} />
+          <Route path="/school" element={<School />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/rasmlar" element={<Gallery />} />
           <Route path="*" element={<Home />} />
@@ -95,6 +101,18 @@ export default function App() {
       </AppMain>
       <BottomNav />
     </BrowserRouter>
+  );
+}
+
+// Android ilova eski versiyada qolgan bo'lsa (serverda yangi versiya), yangilashni taklif qilamiz
+function UpdateBanner() {
+  const server = useSyncExternalStore(subscribeBuild, getServerBuild, getServerBuild);
+  if (!Capacitor.isNativePlatform() || !server || __BUILD__ === 'dev' || server === __BUILD__) return null;
+  return (
+    <div className="update-banner">
+      <span>🔄 Ilovaning yangi versiyasi chiqdi</span>
+      <a className="btn small" href={APK_URL} target="_blank" rel="noreferrer">Yangilash</a>
+    </div>
   );
 }
 

@@ -16,7 +16,8 @@ import {
   type AppState, type Attempt, type Mode,
 } from '../store/store';
 import { useT } from '../store/i18n';
-import { sendReport } from '../store/api';
+import { ApiError, sendReport } from '../store/api';
+import { resizeImage } from '../lib/image';
 import { mixedQuestions, topicScores, weakPractice, weakTopics } from '../lib/analysis';
 
 interface QuizSpec { title: string; questions: Question[]; mode: Mode }
@@ -65,7 +66,7 @@ const REPORT_REASONS = ["Javob noto'g'ri", "Savol matnida xato", 'Izoh tushunars
 export default function Quiz() {
   const { mode = 'exam', param } = useParams();
   const { pathname } = useLocation();
-  const { t, tc, lang } = useT();
+  const { t, tc } = useT();
   const cfg = useStore((s) => s.exam);
   const favorites = useStore((s) => s.favorites);
   const isExam = mode === 'exam';
@@ -163,14 +164,6 @@ export default function Quiz() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const speak = () => {
-    if (!q || !('speechSynthesis' in window)) return;
-    const u = new SpeechSynthesisUtterance([tc(q.text), ...order.map((o, i) => `${i + 1}. ${tc(q.options[o])}`)].join('. '));
-    u.lang = lang === 'ru' ? 'ru-RU' : 'uz-UZ';
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  };
-
   const restart = () => {
     const s = resolveQuiz(getState(), mode as Mode, param);
     setSpec(s); setSeed(Date.now()); setIndex(0); setAnswers({}); setTimes({}); setFinished(null);
@@ -214,9 +207,8 @@ export default function Quiz() {
         <div className="q-meta">
           <span>{t('Savol')} {index + 1} / {spec.questions.length}{q.author && <> · 👤 {q.author}</>}</span>
           <span className="q-tools">
-            <button className="icon-btn" onClick={speak} title={t("Ovozli o'qish")} aria-label={t("Ovozli o'qish")}>🔊</button>
             <button className="icon-btn" onClick={() => toggleFavorite(q.id)} title={t('Saralash')} aria-pressed={favorites.includes(q.id)}>{favorites.includes(q.id) ? '★' : '☆'}</button>
-            <button className="icon-btn" onClick={() => setReport(true)} title={t('Xato haqida xabar berish')}>⚑</button>
+            <button className="btn ghost small report-btn" onClick={() => setReport(true)} title={t('Xato haqida xabar berish')}>⚠️ {t('Xato bormi?')}</button>
           </span>
         </div>
         <h2 className="q-text">{tc(q.text)}</h2>
@@ -258,30 +250,89 @@ export default function Quiz() {
         <div className="zoom"><QuestionMedia q={q} size={320} /></div>
         {sign && <p>{sign.code} {tc(sign.name)}: {tc(sign.description)}</p>}
       </Modal>
-      <ReportModal open={report} onClose={() => setReport(false)} qid={q.id} />
+      <ReportModal open={report} onClose={() => setReport(false)} q={q} />
     </div>
   );
 }
 
-function ReportModal({ open, onClose, qid }: { open: boolean; onClose: () => void; qid: string }) {
+function ReportModal({ open, onClose, q }: { open: boolean; onClose: () => void; q: Question }) {
   const { t } = useT();
-  const [reason, setReason] = useState(REPORT_REASONS[0]);
+  const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');
-  const [sent, setSent] = useState(false);
-  useEffect(() => { if (open) { setSent(false); setComment(''); } }, [open]);
+  const [image, setImage] = useState<string | undefined>();
+  const [edit, setEdit] = useState(false);
+  const [fix, setFix] = useState({ text: q.text, options: q.options, correct: q.correct, explanation: q.explanation ?? '' });
+  const [state, setState] = useState<'form' | 'sending' | 'sent'>('form');
+  const [error, setError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    setState('form'); setReason(''); setComment(''); setImage(undefined); setEdit(false); setError('');
+    setFix({ text: q.text, options: q.options, correct: q.correct, explanation: q.explanation ?? '' });
+  }, [open, q]);
+  const changed = edit && (fix.text !== q.text || fix.correct !== q.correct || fix.explanation !== (q.explanation ?? '') || fix.options.some((o, i) => o !== q.options[i]));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reason) return setError('Xatolik sababini tanlang');
+    if (comment.trim().length < 5 && !changed) return setError("Nima xato ekanini yozing (kamida 5 belgi) yoki pastda savolni o'zingiz tuzating");
+    if (changed && (fix.text.trim().length < 5 || fix.options.some((o) => !o.trim()))) return setError("Tuzatilgan savolda matn va barcha variantlar to'ldirilishi kerak");
+    setState('sending'); setError('');
+    const body = { qid: q.id, reason, comment: comment.trim(), image, proposal: changed ? fix : undefined };
+    try { await sendReport(body); setState('sent'); }
+    catch (err) {
+      // Internet yo'q — keyinroq ko'rish uchun qurilmada saqlaymiz; server rad etsa, sababini ko'rsatamiz
+      if (err instanceof ApiError && err.status === 0) { addLocalReport({ qid: q.id, reason, comment: comment.trim() }); setState('sent'); }
+      else { setError(err instanceof Error ? err.message : 'Xatolik'); setState('form'); }
+    }
+  };
+
   return (
-    <Modal open={open} onClose={onClose} title={t('Xato haqida xabar berish')}>
-      {sent ? <p>Rahmat! Xabaringiz moderatorga yuborildi.</p> : (
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          try { await sendReport({ qid, reason, comment }); } catch { addLocalReport({ qid, reason, comment }); }
-          setSent(true);
-        }}>
+    <Modal open={open} onClose={onClose} title="Savolda xato topdingizmi?">
+      {state === 'sent' ? (<>
+        <p>Rahmat! Xabaringiz moderatorga yuborildi. Tekshirilgach, savol hamma uchun tuzatiladi.</p>
+        <div className="row-end"><Link className="btn ghost" to="/submit">✍️ Yangi savol qo'shish</Link><button className="btn" onClick={onClose}>Yopish</button></div>
+      </>) : (
+        <form className="form" onSubmit={submit}>
           <div className="radio-list">
             {REPORT_REASONS.map((r) => <label key={r}><input type="radio" name="reason" checked={reason === r} onChange={() => setReason(r)} /> {r}</label>)}
           </div>
-          <textarea placeholder="Izoh (ixtiyoriy)" value={comment} onChange={(e) => setComment(e.target.value)} rows={3} />
-          <div className="row-end"><button type="button" className="btn ghost" onClick={onClose}>{t('Bekor qilish')}</button><button className="btn">{t('Yuborish')}</button></div>
+          <label>Nima xato? <span className="muted small">(majburiy, agar savolni o'zingiz tuzatmasangiz)</span>
+            <textarea placeholder="Masalan: to'g'ri javob 2-variant, chunki…" value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={1000} />
+          </label>
+
+          <div className="row-wrap">
+            <button type="button" className="btn ghost small" onClick={() => fileRef.current?.click()}>📷 {image ? 'Rasmni almashtirish' : 'Rasm biriktirish'}</button>
+            {image && <button type="button" className="btn ghost small" onClick={() => setImage(undefined)}>✕ Rasmni olib tashlash</button>}
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) try { setImage(await resizeImage(f, 1000)); } catch { setError("Rasmni o'qib bo'lmadi"); }
+            }} />
+          </div>
+          {image && <img src={image} alt="Biriktirilgan rasm" className="report-img" />}
+
+          <label className="check"><input type="checkbox" checked={edit} onChange={(e) => setEdit(e.target.checked)} /> ✏️ Savolni o'zim tuzataman</label>
+          {edit && (
+            <div className="fix-box">
+              <label>Savol matni<textarea rows={3} value={fix.text} onChange={(e) => setFix({ ...fix, text: e.target.value })} maxLength={500} /></label>
+              <p className="small muted">Variantlar (to'g'ri javobni belgilang):</p>
+              {fix.options.map((o, i) => (
+                <div key={i} className="fix-opt">
+                  <input type="radio" name="fix-correct" checked={fix.correct === i} onChange={() => setFix({ ...fix, correct: i })} aria-label={`${i + 1}-variant to'g'ri`} />
+                  <input value={o} onChange={(e) => setFix({ ...fix, options: fix.options.map((x, j) => (j === i ? e.target.value : x)) })} maxLength={200} />
+                </div>
+              ))}
+              <label>Izoh<textarea rows={2} value={fix.explanation} onChange={(e) => setFix({ ...fix, explanation: e.target.value })} maxLength={1000} /></label>
+              {!changed && <p className="muted small">Hali hech narsa o'zgartirilmadi.</p>}
+            </div>
+          )}
+          {error && <p className="bad-text small">{error}</p>}
+          <div className="row-end">
+            <button type="button" className="btn ghost" onClick={onClose}>{t('Bekor qilish')}</button>
+            <button className="btn" disabled={state === 'sending'}>{state === 'sending' ? 'Yuborilmoqda…' : 'Moderatorga yuborish'}</button>
+          </div>
+          <p className="small center"><Link to="/submit">✍️ O'z savolingizni qo'shmoqchimisiz?</Link></p>
         </form>
       )}
     </Modal>

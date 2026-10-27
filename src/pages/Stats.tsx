@@ -1,25 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Empty, PageHeader, Progress, toneFor } from '../components/ui';
+import Achievements from '../components/Achievements';
 import { TOPICS } from '../data/topics';
 import { readinessIndex } from '../lib/exam';
 import { isMastered } from '../lib/srs';
-import { dayStreak, publishedQuestions, todayKey, useStore, type AppState } from '../store/store';
+import { dayStreak, publishedQuestions, todayKey, useStore } from '../store/store';
 import { useT } from '../store/i18n';
-
-interface Achievement { id: string; icon: string; title: string; done: (s: AppState) => boolean }
-
-const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first', icon: '🚀', title: 'Birinchi qadam — 1 ta savol', done: (s) => Object.keys(s.stats).length > 0 },
-  { id: 'hundred', icon: '💯', title: '100 ta javob', done: (s) => Object.values(s.stats).reduce((a, x) => a + x.correct + x.wrong, 0) >= 100 },
-  { id: 'exam1', icon: '🎓', title: "Birinchi imtihondan o'tish", done: (s) => s.attempts.some((a) => a.mode === 'exam' && a.passed) },
-  { id: 'perfect', icon: '🏆', title: 'Xatosiz imtihon', done: (s) => s.attempts.some((a) => a.mode === 'exam' && a.passed && a.errors === 0) },
-  { id: 'streak7', icon: '🔥', title: '7 kunlik seriya', done: (s) => dayStreak(s.activity) >= 7 },
-  { id: 'signs', icon: '⚠️', title: 'Belgilar ustasi — barcha belgi savollari', done: (s) => {
-    const qs = publishedQuestions(s).filter((q) => q.topic === 'belgilar');
-    return qs.length > 0 && qs.every((q) => isMastered(s.stats[q.id]));
-  } },
-  { id: 'marathon', icon: '🏃', title: 'Marafonni tugatish', done: (s) => s.attempts.some((a) => a.mode === 'marathon' && a.answered >= a.total) },
-];
 
 export default function Stats() {
   const { t, tc } = useT();
@@ -92,12 +78,8 @@ export default function Stats() {
       )}
 
       <h3 className="section-title">Yutuqlar</h3>
-      <div className="achievements">
-        {ACHIEVEMENTS.map((a) => {
-          const done = a.done(s);
-          return <div key={a.id} className={'ach ' + (done ? 'done' : '')}><span>{a.icon}</span><span className="small">{tc(a.title)}</span></div>;
-        })}
-      </div>
+      <Achievements />
+      <p className="small"><Link to="/rating">🏅 Reyting va boshqalar bilan solishtirish →</Link></p>
 
       <h3 className="section-title">Savollar bo'yicha</h3>
       <Progress value={pool.length ? (mastered / pool.length) * 100 : 0} tone="good" />

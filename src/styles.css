@@ -252,3 +252,33 @@ h4 { margin: 8px 0 4px; }
 .mini-hours { display: inline-grid; grid-template-columns: repeat(24, 4px); gap: 1px; align-items: end; height: 22px; vertical-align: middle; }
 .mini-hours > i { background: var(--primary); min-height: 1px; display: block; }
 .tab-badge { margin-left: 4px; }
+
+/* Reyting, yutuqlar, avtomaktab */
+.tiny { font-size: .72rem; }
+.ach .grow { min-width: 0; }
+.ach-bar { display: block; height: 4px; background: var(--surface-2); border-radius: 4px; margin-top: 4px; overflow: hidden; }
+.ach-bar > span { display: block; height: 100%; background: var(--primary); }
+.table.rating tr.me td { background: var(--warn-bg); font-weight: 600; }
+label.check { display: flex; align-items: center; gap: 8px; margin: 8px 0; cursor: pointer; }
+.code-input { font-family: ui-monospace, monospace; letter-spacing: .2em; text-transform: uppercase; }
+.invite { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px dashed var(--primary); border-radius: 12px; margin: 10px 0; }
+.invite .code { font-family: ui-monospace, monospace; font-size: 1.5rem; letter-spacing: .15em; margin-right: auto; }
+.table-wrap { overflow-x: auto; }
+.table-wrap .progress { min-width: 80px; margin-bottom: 2px; }
+.small-act { grid-template-columns: repeat(14, 1fr); }
+.code-input::placeholder { letter-spacing: normal; text-transform: none; font-family: inherit; }
+.report-btn { padding: 4px 10px; font-size: .8rem; }
+.report-img { max-width: 100%; max-height: 220px; border-radius: 10px; border: 1px solid var(--border); object-fit: contain; }
+.fix-box { border: 1px dashed var(--primary); border-radius: 12px; padding: 10px; display: grid; gap: 8px; }
+.fix-opt { display: flex; gap: 8px; align-items: center; }
+.fix-opt input[type=text], .fix-opt input:not([type]) { flex: 1; }
+.diff-old { text-decoration: line-through; color: var(--bad); }
+.diff-new { background: var(--good-bg, rgba(22,163,74,.15)); border-radius: 4px; }
+.update-banner { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; background: var(--primary); color: #fff; font-size: .9rem; }
+.update-banner .btn { background: #fff; color: var(--primary); }
+.cta.add-q { background: var(--surface); color: var(--text); border: 2px dashed var(--primary); margin-bottom: 12px; }
+.pw-field { position: relative; display: block; }
+.pw-field input { width: 100%; padding-right: 44px; }
+.pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 1.1rem; cursor: pointer; padding: 6px 8px; }
+.form .radio-list label, .radio-list label { display: flex; flex-direction: row; align-items: center; gap: 8px; font-weight: 500; }
+.radio-list { display: grid; gap: 6px; }

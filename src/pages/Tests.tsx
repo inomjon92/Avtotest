@@ -24,6 +24,11 @@ export default function Tests() {
   return (
     <div className="page">
       <PageHeader title={t('Testlar')} back={false} />
+      <Link to="/submit" className="cta add-q">
+        <span className="cta-icon">✍️</span>
+        <span><b>{t("Yangi savol qo'shish")}</b><br /><small>{t("O'z savolingizni yuboring — moderator tekshirgach hammaga chiqadi")}</small></span>
+        <span>→</span>
+      </Link>
       <div className="grid">
         <Card to="/quiz/exam" icon="🎓" title={t('Imtihon simulyatori')} subtitle={`${s.exam.questionCount} ${t('savol')} · ${s.exam.minutes} ${t('daqiqa')}`} />
         <Card to="/quiz/review" icon="🧠" title={t('Aqlli takrorlash')} />

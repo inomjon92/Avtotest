@@ -5,7 +5,7 @@ import {
 
 const LOGIN_RE = /^[a-z0-9_.]{3,32}$/;
 
-const publicUser = (u: UserRow) => ({ id: u.id, login: u.login, name: u.name, role: 'student' as const });
+const publicUser = (u: UserRow) => ({ id: u.id, login: u.login, name: u.name, role: (u.role === 'teacher' ? 'teacher' : 'student') as 'student' | 'teacher' });
 
 function checkPassword(pw: string) {
   if (pw.length < 5) throw new HttpError(400, "Parol kamida 5 belgidan iborat bo'lishi kerak");

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: ReactNode }) {
@@ -51,3 +51,14 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 export const toneFor = (pct: number): 'good' | 'warn' | 'bad' => (pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'bad');
+
+/** Parol maydoni: 👁 tugmasi bilan yozilgan parolni ko'rish mumkin */
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="pw-field">
+      <input {...props} type={show ? 'text' : 'password'} />
+      <button type="button" className="pw-eye" onClick={() => setShow(!show)} aria-label={show ? 'Parolni yashirish' : "Parolni ko'rsatish"} title={show ? 'Parolni yashirish' : "Parolni ko'rsatish"}>{show ? '🙈' : '👁'}</button>
+    </span>
+  );
+}

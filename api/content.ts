@@ -2,6 +2,16 @@
 import { currentUser, db, handler, HttpError, q, readToken, requireAdmin } from './_lib.js';
 
 const MAX_BYTES = 8_000_000;
+const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
+
+function cleanProposal(raw: any) {
+  const text = str(raw?.text, 500);
+  const options = (Array.isArray(raw?.options) ? raw.options : []).map((o: unknown) => str(o, 200));
+  const correct = Number(raw?.correct);
+  if (text.length < 5 || options.length < 2 || options.length > 5 || options.some((o: string) => !o)) throw new HttpError(400, "Tuzatilgan savolda matn va barcha variantlar to'ldirilishi kerak");
+  if (!Number.isInteger(correct) || correct < 0 || correct >= options.length) throw new HttpError(400, "To'g'ri javobni belgilang");
+  return { text, options, correct, explanation: str(raw?.explanation, 1000) };
+}
 
 export default handler(async (req) => {
   const s = await db();
@@ -15,6 +25,7 @@ export default handler(async (req) => {
       exam: get('exam')?.value ?? null,
       faq: get('faq')?.value ?? null,
       updatedAt: Math.max(0, ...rows.map((r) => r.updated_at.getTime())),
+      build: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7),
     };
   }
 
@@ -47,9 +58,19 @@ export default handler(async (req) => {
   if (req.method === 'POST' && action === 'report') {
     const auth = String(req.headers['authorization'] ?? '').replace(/^Bearer\s+/i, '');
     const uid = readToken(auth);
-    const { qid, reason, comment } = req.body ?? {};
-    if (!qid || !reason) throw new HttpError(400, "Ma'lumot yetarli emas");
-    await s`insert into reports (user_id, qid, reason, comment) values (${uid}, ${String(qid).slice(0, 64)}, ${String(reason).slice(0, 100)}, ${String(comment ?? '').slice(0, 1000)})`;
+    const { qid, reason } = req.body ?? {};
+    const comment = String(req.body?.comment ?? '').trim();
+    if (!qid || !reason) throw new HttpError(400, "Xatolik sababini tanlang");
+    // Tuzatish taklifi (savol matni, variantlar, to'g'ri javob) — ixtiyoriy
+    const proposal = req.body?.proposal ? cleanProposal(req.body.proposal) : null;
+    if (comment.length < 5 && !proposal) throw new HttpError(400, "Xatolik sababini yozing (kamida 5 belgi) yoki savolni tuzatib yuboring");
+    const image = typeof req.body?.image === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(req.body.image) && req.body.image.length < 1_500_000 ? req.body.image : null;
+    if (uid) {
+      const [{ n }] = await s`select count(*)::int as n from reports where user_id = ${uid} and at > now() - interval '1 day'`;
+      if (n >= 30) throw new HttpError(429, "Bir kunda 30 tadan ortiq xabar yuborib bo'lmaydi");
+    }
+    await s`insert into reports (user_id, qid, reason, comment, image, proposal)
+      values (${uid}, ${String(qid).slice(0, 64)}, ${String(reason).slice(0, 100)}, ${comment.slice(0, 1000)}, ${image}, ${proposal ? s.json(proposal) : null})`;
     return { ok: true };
   }
 

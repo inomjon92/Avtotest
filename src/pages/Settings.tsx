@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/ui';
+import { PageHeader, PasswordInput } from '../components/ui';
 import { getState, initialState, replaceState, setGuest, updateSettings, useSession, useStore, type Lang } from '../store/store';
 import { api, logout } from '../store/api';
 import { useT } from '../store/i18n';
@@ -8,7 +8,7 @@ import { useT } from '../store/i18n';
 const LANGS: { id: Lang; label: string }[] = [
   { id: 'uz', label: "O'zbekcha (lotin)" },
   { id: 'uzc', label: 'Ўзбекча (кирилл)' },
-  { id: 'ru', label: 'Русский (интерфейс)' },
+  { id: 'ru', label: 'Русский' },
 ];
 
 export function download(name: string, content: string, type = 'application/json') {
@@ -49,6 +49,11 @@ export default function Settings() {
             <button className="btn ghost small" onClick={() => { if (confirm('Hisobdan chiqasizmi?')) logout(); }}>{t('Chiqish')}</button>
           </div>
           <p className="muted small">Progressingiz serverda saqlanadi: boshqa telefon yoki kompyuterdan shu login bilan kirsangiz, davom ettirasiz.</p>
+          <div className="row-wrap">
+            <Link className="btn ghost small" to="/school">{session.user.role === 'teacher' ? '👨‍🏫' : '👥'} {t('Avtomaktab')}</Link>
+            <Link className="btn ghost small" to="/rating">🏅 {t('Reyting')}</Link>
+          </div>
+          <label className="check small"><input type="checkbox" checked={!!st.hideRating} onChange={(e) => updateSettings({ hideRating: e.target.checked })} /> Umumiy reytingda meni ko'rsatmang</label>
           <ChangePassword />
         </>) : (<>
           <p><b>Mehmon rejimi</b></p>
@@ -71,7 +76,7 @@ export default function Settings() {
             {LANGS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
           </select>
         </label>
-        {st.lang === 'ru' && <p className="muted small">Savollar hozircha o'zbek tilida. Rus va qoraqalpoq tilidagi baza admin panel orqali import qilinadi.</p>}
+        {st.lang === 'ru' && <p className="muted small">Вопросы, варианты ответов, пояснения и дорожные знаки — на русском. Уроки справочника пока на узбекском.</p>}
         <label>{t("Ko'rinish")}
           <select value={st.theme} onChange={(e) => updateSettings({ theme: e.target.value as typeof st.theme })}>
             <option value="system">{t('Tizim')}</option><option value="light">{t("Yorug'")}</option><option value="dark">{t("Qorong'i")}</option>
@@ -99,7 +104,7 @@ export default function Settings() {
 
       <section className="panel">
         <Link to="/admin" className="list-item">🛠 {t('Admin panel')} <span className="muted small">(administrator kirishi)</span></Link>
-        <p className="muted small">Avtotest v1.0 · Savollar bazasi namunaviy, rasmiy biletlar emas.</p>
+        <p className="muted small">Avtotest · versiya {__BUILD__} · Savollar bazasi namunaviy, rasmiy biletlar emas.</p>
       </section>
     </div>
   );
@@ -117,8 +122,8 @@ function ChangePassword() {
       try { await api('/auth?action=password', { body: { password: cur, newPassword: next } }); setMsg("Parol o'zgartirildi"); setCur(''); setNext(''); }
       catch (err) { setMsg(err instanceof Error ? err.message : 'Xatolik'); }
     }}>
-      <label>Joriy parol<input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></label>
-      <label>Yangi parol<input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={5} required /></label>
+      <label>Joriy parol<PasswordInput value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></label>
+      <label>Yangi parol<PasswordInput value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={5} required /></label>
       {msg && <p className="small">{msg}</p>}
       <div className="row-wrap"><button className="btn small">Saqlash</button><button type="button" className="btn ghost small" onClick={() => setOpen(false)}>Yopish</button></div>
     </form>

@@ -1,3 +1,4 @@
+import { PasswordInput } from '../components/ui';
 import { useState } from 'react';
 import { apiAvailable, login, register } from '../store/api';
 import { setGuest } from '../store/store';
@@ -43,8 +44,8 @@ export default function Login() {
           <form className="form" onSubmit={submit}>
             {mode === 'register' && <label>{t('Ism')}<input value={form.name} onChange={set('name')} autoComplete="name" required placeholder="Ism Familiya" /></label>}
             <label>{t('Login')}<input value={form.login} onChange={set('login')} autoComplete="username" autoCapitalize="none" required placeholder="masalan: akbar" /></label>
-            <label>{t('Parol')}<input type="password" value={form.password} onChange={set('password')} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 5 : 1} /></label>
-            {mode === 'register' && <label>{t('Parolni takrorlang')}<input type="password" value={form.password2} onChange={set('password2')} autoComplete="new-password" required /></label>}
+            <label>{t('Parol')}<PasswordInput value={form.password} onChange={set('password')} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 5 : 1} /></label>
+            {mode === 'register' && <label>{t('Parolni takrorlang')}<PasswordInput value={form.password2} onChange={set('password2')} autoComplete="new-password" required /></label>}
             <label className="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> {t('Meni eslab qol')}</label>
             {error && <p className="bad-text small">{error}</p>}
             <button className="btn" disabled={busy}>{busy ? '…' : mode === 'login' ? t('Kirish') : t("Ro'yxatdan o'tish")}</button>

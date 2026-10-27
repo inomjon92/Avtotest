@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { toCyrillic } from '../lib/translit';
 import { useStore, type Lang } from './store';
 
@@ -29,7 +30,10 @@ const RU: Record<string, string> = {
   'Keyingi bilet': 'Следующий билет', 'Xatolar': 'Ошибки', "O'qilgan bo'limlar": 'Прочитанные разделы', "Bo'lim o'qilgan deb belgilandi": 'Раздел отмечен как прочитанный',
   'Qiyin savollar': 'Сложные вопросы', 'Murakkab vaziyatlar va xatolaringiz': 'Сложные ситуации и ваши ошибки', "o'tilgan": 'пройдено',
   'Javoblar tahlili': 'Разбор ответов', 'Sizning javobingiz': 'Ваш ответ', "To'g'ri javob": 'Правильный ответ', 'Javob berilmagan': 'Нет ответа',
-  'Kontent tili': 'Язык контента', 'Natijalar': 'Результаты', "Barchasi": 'Все', 'Yangi': 'Новые', 'Hal qilindi': 'Решено',
+  'Kontent tili': 'Язык контента', 'Xato bormi?': 'Есть ошибка?', "Yangi savol qo'shish": 'Добавить вопрос',
+  "O'z savolingizni yuboring — moderator tekshirgach hammaga chiqadi": 'Отправьте свой вопрос — после проверки модератором он станет доступен всем', 'Reyting': 'Рейтинг', 'Yutuqlar': 'Достижения', 'yutuq': 'достиж.', 'Shu hafta': 'Эта неделя', 'Umumiy': 'Общий',
+  'Avtomaktab': 'Автошкола', 'Guruhlarim': 'Мои группы', "Guruhga qo'shilish": 'Вступить в группу', 'Yordamchi': 'Помощник', 'Savolingizga javob': 'Ответ на ваш вопрос',
+  'Savol yuborish': 'Предложить вопрос', "O'z savolingizni qo'shing": 'Добавьте свой вопрос', 'Siz uchun tavsiyalar': 'Рекомендации для вас', 'Natijalar': 'Результаты', "Barchasi": 'Все', 'Yangi': 'Новые', 'Hal qilindi': 'Решено',
 };
 
 export function translate(lang: Lang, s: string) {
@@ -38,13 +42,27 @@ export function translate(lang: Lang, s: string) {
   return s;
 }
 
-/** Kontent (savollar, qoidalar) hozircha o'zbek tilida; kirill rejimida o'giriladi. */
+// Ruscha kontent (savollar, belgilar) alohida faylda — faqat rus tili tanlanganda yuklanadi
+let ruContent: Map<string, string> | null = null;
+let ruLoading: Promise<void> | null = null;
+const ruListeners = new Set<() => void>();
+export function loadRuContent() {
+  ruLoading ??= import('../data/ru').then((m) => { ruContent = m.buildRuMap(); ruListeners.forEach((l) => l()); });
+  return ruLoading;
+}
+const subscribeRu = (l: () => void) => { ruListeners.add(l); return () => { ruListeners.delete(l); }; };
+const getRu = () => ruContent;
+
+/** Kontent: rus tilida tarjima (bo'lsa), kirill rejimida o'giriladi, aks holda o'zbekcha asl matn. */
 export function translateContent(lang: Lang, s: string) {
+  if (lang === 'ru') return ruContent?.get(s) ?? s;
   return lang === 'uzc' ? toCyrillic(s) : s;
 }
 
 export function useT() {
   const lang = useStore((s) => s.settings.lang);
+  useSyncExternalStore(subscribeRu, getRu, getRu);
+  if (lang === 'ru' && !ruContent) loadRuContent();
   const t = (s: string) => translate(lang, s);
   const tc = (s: string) => translateContent(lang, s);
   return { t, tc, lang };

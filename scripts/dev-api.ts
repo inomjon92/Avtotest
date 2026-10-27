@@ -9,6 +9,7 @@ const routes: Record<string, () => Promise<{ default: (req: Req, res: Res) => Pr
   content: () => import('../api/content.js'),
   admin: () => import('../api/admin.js'),
   community: () => import('../api/community.js'),
+  school: () => import('../api/school.js'),
 };
 
 async function readBody(req: IncomingMessage) {

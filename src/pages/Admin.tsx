@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Empty, Modal, PageHeader } from '../components/ui';
+import { Empty, Modal, PageHeader, PasswordInput } from '../components/ui';
 import { RoadSign } from '../components/RoadSign';
 import type { Question, QuestionStatus } from '../data/types';
 import { TOPICS, topicById } from '../data/topics';
@@ -79,7 +79,7 @@ function AdminLoginForm() {
       }}>
         <p className="muted small">Administrator login va paroli oddiy foydalanuvchilarnikidan alohida. Sessiya 12 soat amal qiladi.</p>
         <label>Admin login<input value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" autoCapitalize="none" required /></label>
-        <label>Parol<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>
+        <label>Parol<PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>
         {error && <p className="bad-text small">{error}</p>}
         <button className="btn" disabled={busy}>{busy ? '…' : 'Kirish'}</button>
       </form>
@@ -190,7 +190,7 @@ function UsersTab() {
         <tbody>
           {list.map((u) => (
             <tr key={u.id} className="clickable" onClick={() => setOpen(u.id)}>
-              <td><b>{u.name || '—'}</b>{u.blocked && <span className="status"> bloklangan</span>}<br /><span className="muted small">@{u.login}</span></td>
+              <td><b>{u.name || '—'}</b>{u.blocked && <span className="status"> bloklangan</span>}{u.role === 'teacher' && <span className="status"> 👨‍🏫 o'qituvchi</span>}<br /><span className="muted small">@{u.login}</span></td>
               <td className="nowrap">{ago(u.lastSeen)}<br /><span className="muted small">{fmtDate(u.lastSeen)}</span></td>
               <td><span className="mono small">{u.ip || '—'}</span><br /><span className="muted small">{device(u.agent)}</span></td>
               <td>{u.loginCount}</td>
@@ -236,6 +236,7 @@ function UserModal({ id, onClose, onChanged }: { id: number; onClose: () => void
             <div className="tile"><span>Javoblar / aniqlik</span><b>{data.user.answers} · {data.user.accuracy}%</b></div>
             <div className="tile"><span>O'qilgan bo'limlar</span><b>{data.user.rulesRead} / {RULES.length}</b></div>
           </div>
+          {data.user.role === 'teacher' && <p className="small">👨‍🏫 <b>O'qituvchi</b> — avtomaktab kabinetida guruh ochib, o'quvchilar natijalarini ko'radi.</p>}
           <p className="small">Oxirgi IP: <span className="mono">{data.user.ip || '—'}</span> · Qurilma: <b>{device(data.user.agent)}</b> · Kirishlar soni: {data.user.loginCount}</p>
           {data.user.examDate && <p className="small">Imtihon sanasi: <b>{data.user.examDate}</b></p>}
 
@@ -262,6 +263,7 @@ function UserModal({ id, onClose, onChanged }: { id: number; onClose: () => void
 
           <div className="row-wrap">
             <button className="btn ghost small" onClick={() => act('update-user', { blocked: !data.user.blocked }, data.user.blocked ? undefined : 'Foydalanuvchi bloklansinmi? U ilovaga kira olmaydi.')}>{data.user.blocked ? 'Blokdan chiqarish' : 'Bloklash'}</button>
+            <button className="btn ghost small" onClick={() => act('update-user', { role: data.user.role === 'teacher' ? 'student' : 'teacher' }, data.user.role === 'teacher' ? "O'qituvchi huquqi olib tashlansinmi?" : "Foydalanuvchiga o'qituvchi (avtomaktab) huquqi berilsinmi? U guruh ochib, o'quvchilar natijalarini ko'ra oladi.")}>{data.user.role === 'teacher' ? "👨‍🏫 O'qituvchilikdan olish" : "👨‍🏫 O'qituvchi qilish"}</button>
             <button className="btn danger small" onClick={() => act('delete-user', {}, "Foydalanuvchi va uning barcha natijalari o'chiriladi. Davom etasizmi?")}>O'chirish</button>
           </div>
         </div>
@@ -483,9 +485,30 @@ function StatsTab() {
 
 // ---------- Xato xabarlari ----------
 
+interface Proposal { text: string; options: string[]; correct: number; explanation: string }
+interface ReportRow { id: number; qid: string; reason: string; comment: string; status: string; at: string; login: string | null; image: string | null; proposal: Proposal | null }
+
+/** Foydalanuvchi tuzatish taklifi: o'zgargan joylar ajratib ko'rsatiladi */
+function ProposalDiff({ q, p }: { q: Question; p: Proposal }) {
+  const mark = (a: string, b: string) => (a !== b ? 'diff-new' : '');
+  return (
+    <div className="fix-box small">
+      <b>✏️ Foydalanuvchi taklifi</b>
+      {p.text !== q.text && <p><span className="diff-old">{q.text}</span><br /><span className="diff-new">{p.text}</span></p>}
+      <ol className="plain">
+        {p.options.map((o, i) => (
+          <li key={i} className={mark(o, q.options[i] ?? '')}>{i === p.correct ? '✓ ' : '• '}{o}{i === q.correct && i !== p.correct && <span className="muted"> (avval to'g'ri edi)</span>}</li>
+        ))}
+      </ol>
+      {p.correct !== q.correct && <p className="bad-text">To'g'ri javob o'zgartirilgan: {q.correct + 1}-variant → {p.correct + 1}-variant</p>}
+      {p.explanation !== (q.explanation ?? '') && <p><span className="muted">Izoh:</span> <span className="diff-new">{p.explanation}</span></p>}
+    </div>
+  );
+}
+
 function ReportsTab({ onChange }: { onChange: () => void }) {
   const s = useStore((x) => x);
-  const { data, error, reload } = useApi<{ reports: { id: number; qid: string; reason: string; comment: string; status: string; at: string; login: string | null }[] }>('/admin?action=reports');
+  const { data, error, reload } = useApi<{ reports: ReportRow[] }>('/admin?action=reports');
   const [filter, setFilter] = useState<'new' | 'resolved' | ''>('new');
   const [fix, setFix] = useState<{ q: Question; report: number } | null>(null);
   if (error) return <p className="bad-text">{error}</p>;
@@ -503,8 +526,11 @@ function ReportsTab({ onChange }: { onChange: () => void }) {
           <p><b>{r.reason}</b> · <span className="muted small">{fmtDate(r.at)} · {r.login ? '@' + r.login : 'mehmon'}</span></p>
           <p className="small"><span className="mono muted">{r.qid}</span> · {byId.get(r.qid)?.text ?? "savol topilmadi (o'chirilgan bo'lishi mumkin)"}</p>
           {r.comment && <p className="muted small">“{r.comment}”</p>}
+          {r.image && <a href={r.image} target="_blank" rel="noreferrer"><img src={r.image} alt="Foydalanuvchi rasmi" className="report-img" /></a>}
+          {r.proposal && byId.get(r.qid) && <ProposalDiff q={byId.get(r.qid)!} p={r.proposal} />}
           <div className="row-wrap">
-            {byId.get(r.qid) && <button className="btn small" onClick={() => setFix({ q: byId.get(r.qid)!, report: r.id })}>✏️ Savolni tuzatish</button>}
+            {r.proposal && byId.get(r.qid) && <button className="btn small" onClick={() => setFix({ q: { ...byId.get(r.qid)!, ...r.proposal! }, report: r.id })}>✓ Taklifni ko'rib qabul qilish</button>}
+            {byId.get(r.qid) && <button className={'btn small' + (r.proposal ? ' ghost' : '')} onClick={() => setFix({ q: byId.get(r.qid)!, report: r.id })}>✏️ Savolni tuzatish</button>}
             <button className="btn ghost small" onClick={() => setStatus(r.id, r.status === 'new' ? 'resolved' : 'new')}>{r.status === 'new' ? '✓ Hal qilindi' : 'Qayta ochish'}</button>
           </div>
         </div>

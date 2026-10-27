@@ -2,7 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Ilova versiyasi (commit): Android ilova serverdagi versiya bilan solishtirib, yangilash kerakligini aytadi
+const BUILD = (process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
+
 export default defineConfig({
+  define: { __BUILD__: JSON.stringify(BUILD) },
   plugins: [
     react(),
     VitePWA({

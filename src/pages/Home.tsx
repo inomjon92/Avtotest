@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { advice, topicScores } from '../lib/analysis';
+import { ACHIEVEMENTS, achievementStatus } from '../lib/achievements';
 import { topicById } from '../data/topics';
 import { unreadCount } from '../store/api';
 import { Card, PageHeader, Progress, toneFor } from '../components/ui';
@@ -48,6 +49,7 @@ export default function Home() {
   const tips = advice(topicScores(pool, s.stats), {
     readiness, examsTaken: exams.length, mistakes, rulesRead: rulesDone, rulesTotal: RULES.length, topicName: (id) => tc(topicById(id)?.name ?? id),
   });
+  const earned = achievementStatus(s).filter((a) => a.done).length;
   const [unread, setUnread] = useState(0);
   useEffect(() => { if (session) unreadCount().then(setUnread).catch(() => {}); }, [session]);
 
@@ -127,6 +129,8 @@ export default function Home() {
         <Card to="/guide" icon="📖" title={t("Yo'riqnoma")} />
         <Card to="/chat" icon="💬" title={t('Yordamchi')} subtitle={t('Savolingizga javob')} badge={unread || undefined} />
         <Card to="/submit" icon="✍️" title={t('Savol yuborish')} subtitle={t("O'z savolingizni qo'shing")} />
+        <Card to="/rating" icon="🏅" title={t('Reyting')} subtitle={`${earned}/${ACHIEVEMENTS.length} ${t('yutuq')}`} />
+        <Card to="/school" icon={session?.user.role === 'teacher' ? '👨‍🏫' : '👥'} title={t('Avtomaktab')} subtitle={session?.user.role === 'teacher' ? t("Guruhlarim") : t("Guruhga qo'shilish")} />
       </div>
 
       {daysLeft !== null && daysLeft > 1 && (

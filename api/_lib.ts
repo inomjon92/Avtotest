@@ -96,8 +96,70 @@ async function migrate(s: Sql) {
     answered_at timestamptz,
     seen boolean not null default false
   )`;
+  // Avtomaktab guruhlari: o'qituvchi guruh ochadi, o'quvchilar taklif kodi bilan qo'shiladi
+  await s`create table if not exists groups (
+    id serial primary key,
+    teacher_id int not null references users(id) on delete cascade,
+    name text not null,
+    code text unique not null,
+    created_at timestamptz not null default now()
+  )`;
+  await s`create table if not exists group_members (
+    group_id int not null references groups(id) on delete cascade,
+    user_id int not null references users(id) on delete cascade,
+    joined_at timestamptz not null default now(),
+    primary key (group_id, user_id)
+  )`;
+  await s`create index if not exists group_members_user on group_members (user_id)`;
+  // Xato xabariga rasm va foydalanuvchining tuzatish taklifi
+  await s`alter table reports add column if not exists image text`;
+  await s`alter table reports add column if not exists proposal jsonb`;
   await s`create index if not exists logins_at on logins (at)`;
   await s`create index if not exists logins_user_at on logins (user_id, at)`;
+}
+
+// ---- Progress xulosasi (admin, o'qituvchi va reyting uchun) ----
+export interface Stat { correct: number; wrong: number; lastCorrect?: boolean; box: number }
+interface Attempt { mode: string; passed?: boolean; correct: number; total: number; finishedAt: number; errors?: number }
+
+// Faollik kunlari foydalanuvchi qurilmasidagi sana bilan yoziladi — Toshkent vaqtini olamiz
+const dayKey = (d: Date) => new Date(d.getTime() + 5 * 3600000).toISOString().slice(0, 10);
+
+export function summarize(state: any, now = new Date()) {
+  const stats: Record<string, Stat> = state?.stats ?? {};
+  const values = Object.values(stats);
+  const attempts: Attempt[] = state?.attempts ?? [];
+  const exams = attempts.filter((a) => a.mode === 'exam');
+  const answers = values.reduce((n, x) => n + (x.correct || 0) + (x.wrong || 0), 0);
+  const correct = values.reduce((n, x) => n + (x.correct || 0), 0);
+  const mastered = values.filter((x) => x.lastCorrect && x.box >= 2).length;
+  const examsPassed = exams.filter((a) => a.passed).length;
+  // Oxirgi 7 kun: faollik (javoblar soni) va o'tilgan imtihonlar
+  const activity: Record<string, number> = state?.activity ?? {};
+  const weekAgo = new Date(now.getTime() - 6 * 86400000);
+  const weekAnswers = Object.entries(activity).filter(([d]) => d >= dayKey(weekAgo)).reduce((n, [, v]) => n + (Number(v) || 0), 0);
+  const weekPassed = exams.filter((a) => a.passed && a.finishedAt >= now.getTime() - 7 * 86400000).length;
+  let streak = 0;
+  const d = new Date(now);
+  if (!activity[dayKey(d)]) d.setUTCDate(d.getUTCDate() - 1);
+  while (activity[dayKey(d)]) { streak++; d.setUTCDate(d.getUTCDate() - 1); }
+  return {
+    answers,
+    accuracy: answers ? Math.round((correct / answers) * 100) : 0,
+    mastered,
+    seen: values.length,
+    exams: exams.length,
+    examsPassed,
+    lastExam: exams.length ? exams[exams.length - 1] : null,
+    rulesRead: Object.keys(state?.rulesRead ?? {}).length,
+    examDate: state?.settings?.examDate || null,
+    weekAnswers,
+    weekPassed,
+    streak,
+    // Reyting ballari: o'zlashtirilgan savol 5, to'g'ri javob 1, o'tilgan imtihon 20
+    score: mastered * 5 + correct + examsPassed * 20,
+    weekScore: weekAnswers + weekPassed * 20,
+  };
 }
 
 export class HttpError extends Error {

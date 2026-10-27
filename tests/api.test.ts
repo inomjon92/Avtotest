@@ -27,7 +27,7 @@ describe.skipIf(!enabled)('server API', () => {
     server = await startApiServer(PORT);
     const { default: postgres } = await import('postgres');
     const sql = postgres(process.env.DATABASE_URL!, { onnotice: () => {} });
-    await sql`drop table if exists logins, progress, settings, reports, auth_failures, admin_logins, submissions, messages, users cascade`;
+    await sql`drop table if exists logins, progress, settings, reports, auth_failures, admin_logins, submissions, messages, group_members, groups, users cascade`;
     await sql.end();
   });
   afterAll(() => new Promise<void>((r) => server.close(() => r())));
@@ -95,7 +95,17 @@ describe.skipIf(!enabled)('server API', () => {
   });
 
   it('xato xabari yuboriladi va admin uni ko\'radi', async () => {
-    await call('/content?action=report', { body: { qid: 'q1', reason: 'Boshqa', comment: 'test' }, token: userToken });
+    // Sababi yozilmagan xabar qabul qilinmaydi
+    expect((await call('/content?action=report', { body: { qid: 'q1', reason: 'Boshqa', comment: '' }, token: userToken })).status).toBe(400);
+    expect((await call('/content?action=report', { body: { qid: 'q1', reason: 'Boshqa', comment: 'test izoh' }, token: userToken })).status).toBe(200);
+    // Tuzatish taklifi rasm bilan
+    const proposal = { text: 'Tuzatilgan savol matni', options: ['A javob', 'B javob'], correct: 1, explanation: 'izoh' };
+    const img = 'data:image/png;base64,iVBORw0KGgo=';
+    expect((await call('/content?action=report', { body: { qid: 'q2', reason: "Javob noto'g'ri", comment: '', proposal, image: img }, token: userToken })).status).toBe(200);
+    expect((await call('/content?action=report', { body: { qid: 'q2', reason: 'Boshqa', proposal: { ...proposal, options: ['A', ''] } }, token: userToken })).status).toBe(400);
+    const withFix = (await call('/admin?action=reports', { token: adminToken })).data.reports.find((x: any) => x.qid === 'q2');
+    expect(withFix.proposal.correct).toBe(1);
+    expect(withFix.image).toBe(img);
     const r = await call('/admin?action=reports', { token: adminToken });
     expect(r.data.reports[0].login).toBe('ali' + suffix);
   });
@@ -153,6 +163,53 @@ describe.skipIf(!enabled)('server API', () => {
     expect(ali.h1).toBeGreaterThanOrEqual(2);
     expect(ali.d1).toBe(ali.h1);
     expect(ali.hours.reduce((a: number, b: number) => a + b, 0)).toBe(ali.d30);
+  });
+
+  it("avtomaktab: o'qituvchi guruh ochadi, o'quvchi kod bilan qo'shiladi, o'qituvchi natijalarni ko'radi", async () => {
+    const t = await call('/auth?action=register', { body: { login: 'ustoz' + suffix, password: 'secret12', name: 'Ustoz Karimov' } });
+    const tTok = t.data.token;
+    // Oddiy foydalanuvchi guruh ocholmaydi
+    expect((await call('/school?action=create', { body: { name: 'B-1' }, token: tTok })).status).toBe(403);
+    await call('/admin?action=update-user', { body: { id: t.data.user.id, role: 'teacher' }, token: adminToken });
+    expect((await call('/auth?action=me', { token: tTok })).data.user.role).toBe('teacher');
+    const g = await call('/school?action=create', { body: { name: 'B-1 guruh' }, token: tTok });
+    expect(g.status).toBe(200);
+    expect(g.data.group.code).toMatch(/^[A-Z2-9]{6}$/);
+    expect((await call('/school?action=join', { body: { code: 'XXXXXX' }, token: userToken })).status).toBe(404);
+    expect((await call('/school?action=join', { body: { code: g.data.group.code.toLowerCase() }, token: userToken })).status).toBe(200);
+    const mine = await call('/school?action=mine', { token: userToken });
+    expect(mine.data.joined[0].name).toBe('B-1 guruh');
+    expect(mine.data.joined[0].teacher).toBe('Ustoz Karimov');
+    const grp = await call('/school?action=group&id=' + g.data.group.id, { token: tTok });
+    expect(grp.data.members).toHaveLength(1);
+    expect(grp.data.members[0].mastered).toBe(1);
+    expect(grp.data.members[0].examsPassed).toBe(1);
+    const mem = await call(`/school?action=member&id=${g.data.group.id}&user=${grp.data.members[0].id}`, { token: tTok });
+    expect(mem.data.stats.q1.correct).toBe(2);
+    // Boshqa o'quvchi o'qituvchi bo'limini ko'ra olmaydi
+    expect((await call('/school?action=group&id=' + g.data.group.id, { token: userToken })).status).toBe(403);
+    const rating = await call(`/school?action=rating&group=${g.data.group.id}`, { token: userToken });
+    expect(rating.data.top[0].name).toBe('Ali');
+    expect(rating.data.me.place).toBe(1);
+    expect(rating.data.top[0].id).toBeUndefined();
+    const nc = await call('/school?action=update', { body: { id: g.data.group.id, newCode: true }, token: tTok });
+    expect(nc.data.code).not.toBe(g.data.group.code);
+    expect((await call('/school?action=kick', { body: { id: g.data.group.id, user: grp.data.members[0].id }, token: tTok })).status).toBe(200);
+    expect((await call('/school?action=mine', { token: userToken })).data.joined).toHaveLength(0);
+  });
+
+  it("reyting: ball bo'yicha tartiblanadi, yashirishni tanlagan ko'rinmaydi", async () => {
+    const b = await call('/auth?action=register', { body: { login: 'bek' + suffix, password: 'secret12', name: 'Bek Aliyev' } });
+    const state = { v: 1, stats: { q1: { correct: 5, wrong: 0, box: 3, lastCorrect: true }, q2: { correct: 3, wrong: 0, box: 2, lastCorrect: true } }, attempts: [{ id: 'e1', mode: 'exam', passed: true, correct: 20, total: 20, finishedAt: Date.now() }], settings: { name: 'Bek Aliyev' } };
+    await call('/progress', { method: 'PUT', body: { state }, token: b.data.token });
+    let r = await call('/school?action=rating', { token: userToken });
+    expect(r.data.top[0].name).toBe('Bek A.');
+    expect(r.data.me.place).toBe(2);
+    await call('/progress', { method: 'PUT', body: { state: { ...state, settings: { name: 'Bek Aliyev', hideRating: true } } }, token: b.data.token });
+    r = await call('/school?action=rating', { token: userToken });
+    expect(r.data.top.some((x: any) => x.name === 'Bek A.')).toBe(false);
+    // O'zi o'z o'rnini baribir ko'radi
+    expect((await call('/school?action=rating', { token: b.data.token })).data.me.name).toBe('Bek A.');
   });
 
   it('bloklangan foydalanuvchi kira olmaydi', async () => {

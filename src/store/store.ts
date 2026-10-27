@@ -42,6 +42,8 @@ export interface Settings {
   examDate: string;
   dailyGoal: number;
   bhm: number;
+  /** Umumiy reytingda ko'rinmaslik */
+  hideRating?: boolean;
 }
 
 export interface AppState {
@@ -87,7 +89,7 @@ export const initialState = (): AppState => ({
 
 // ---- Sessiya (kim kirgan) ----
 
-export interface SessionUser { id: number; login: string; name: string; role: 'student' }
+export interface SessionUser { id: number; login: string; name: string; role: 'student' | 'teacher' }
 export interface Session { token: string; user: SessionUser }
 
 const SESSION_KEY = 'avtotest:session';
