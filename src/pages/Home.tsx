@@ -84,6 +84,7 @@ export default function Home() {
     <div className="page">
       <PageHeader title="Avtotest · B" back={false} right={<Link to="/settings" className="icon-btn" aria-label={t('Sozlamalar')}>⚙️</Link>} />
 
+      <ContactLink compact />
       <section className="hero">
         <div>
           <p className="muted">{t('Salom')}{name ? `, ${name}` : ''}!</p>
@@ -172,7 +173,6 @@ export default function Home() {
         <h3>💡 {t('Maslahat')}</h3>
         <p>{tc(EXAM_TIPS[new Date().getDate() % EXAM_TIPS.length])}</p>
       </section>
-      <ContactLink />
       <ApkLink />
     </div>
   );
