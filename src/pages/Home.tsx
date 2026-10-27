@@ -5,7 +5,7 @@ import { advice, topicScores } from '../lib/analysis';
 import { ACHIEVEMENTS, achievementStatus } from '../lib/achievements';
 import { topicById } from '../data/topics';
 import { unreadCount } from '../store/api';
-import { Card, PageHeader, Progress, toneFor } from '../components/ui';
+import { PageHeader, Progress, toneFor } from '../components/ui';
 import { EXAM_TIPS } from '../data/extra';
 import { buildTickets, readinessIndex } from '../lib/exam';
 import { RULES } from '../data/rules';
@@ -54,6 +54,31 @@ export default function Home() {
   const [unread, setUnread] = useState(0);
   useEffect(() => { if (session) unreadCount().then(setUnread).catch(() => {}); }, [session]);
 
+  const teacher = session?.user.role === 'teacher';
+  // Bosh sahifa menyusi: maqsad bo'yicha guruhlangan
+  const menu: { title: string; items: { to: string; icon: string; label: string; color: string; sub?: string; badge?: number }[] }[] = [
+    { title: 'Mashq qilish', items: [
+      { to: '/tests#tickets', icon: '🎫', label: 'Biletlar', color: '#2563eb', sub: `${ticketsDone}/${tickets.size}` },
+      { to: '/tests#topics', icon: '📚', label: 'Mavzular', color: '#7c3aed', sub: `${topicsDone}/${TOPICS.length}` },
+      { to: '/quiz/marathon', icon: '🏃', label: 'Marafon', color: '#0891b2', sub: s.marathon.index ? `${s.marathon.index + 1}-savol` : undefined },
+    ] },
+    { title: 'Takrorlash', items: [
+      { to: '/quiz/review', icon: '🧠', label: 'Aqlli takrorlash', color: '#db2777', badge: due },
+      { to: '/quiz/mistakes', icon: '❌', label: 'Xatolar', color: '#dc2626', badge: mistakes },
+      { to: '/quiz/favorites', icon: '⭐', label: 'Saralanganlar', color: '#d97706', badge: s.favorites.length },
+    ] },
+    { title: "O'rganish", items: [
+      { to: '/guide/signs', icon: '⚠️', label: "Yo'l belgilari", color: '#ea580c' },
+      { to: '/guide', icon: '📖', label: "Yo'riqnoma", color: '#16a34a', sub: `${rulesDone}/${RULES.length}` },
+      { to: '/chat', icon: '💬', label: 'Yordamchi', color: '#0d9488', badge: unread },
+    ] },
+    { title: 'Hamjamiyat', items: [
+      { to: '/rating', icon: '🏅', label: 'Reyting', color: '#ca8a04', sub: `${earned}/${ACHIEVEMENTS.length}` },
+      { to: '/school', icon: teacher ? '👨‍🏫' : '👥', label: 'Avtomaktab', color: '#4f46e5' },
+      { to: '/submit', icon: '✍️', label: 'Savol yuborish', color: '#64748b' },
+    ] },
+  ];
+
   return (
     <div className="page">
       <PageHeader title="Avtotest · B" back={false} right={<Link to="/settings" className="icon-btn" aria-label={t('Sozlamalar')}>⚙️</Link>} />
@@ -72,6 +97,35 @@ export default function Home() {
         </div>
       </section>
 
+      {examDay && (
+        <section className="notice">
+          <b>🗓 {t('Imtihon kuni rejimi')}</b>
+          <p>{daysLeft === 0 ? 'Imtihon bugun!' : 'Imtihon ertaga!'} Faqat xatolaringizni takrorlang va dam oling.</p>
+          <Link className="btn" to="/quiz/mistakes">{t('Xatolar ustida ishlash')} ({mistakes})</Link>
+        </section>
+      )}
+      <Link to="/quiz/exam" className="cta">
+        <span className="cta-icon">🎓</span>
+        <span><b>{t('Imtihon simulyatori')}</b><br /><small>{s.exam.questionCount} {t('savol')} · {s.exam.minutes} {t('daqiqa')} · {s.exam.maxErrors} {t('xato')}</small></span>
+        <span>→</span>
+      </Link>
+      <nav className="home-menu" aria-label={t('Menyu')}>
+        {menu.map((g) => (
+          <section key={g.title} className="menu-group">
+            <h3 className="menu-title">{t(g.title)}</h3>
+            <div className="tiles">
+              {g.items.map((it) => (
+                <Link key={it.to} to={it.to} className="tile-link" style={{ '--tile': it.color } as React.CSSProperties}>
+                  <span className="tile-icon" aria-hidden>{it.icon}</span>
+                  <span className="tile-label">{t(it.label)}</span>
+                  {it.sub && <span className="tile-sub">{it.sub}</span>}
+                  {!!it.badge && <span className="badge tile-badge">{it.badge}</span>}
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
+      </nav>
       <section className="panel">
         <h3>📌 {t("O'tilganlar")}</h3>
         <div className="done-grid">
@@ -89,7 +143,6 @@ export default function Home() {
           {mistakes > 0 && <Link className="btn ghost small" to="/quiz/mistakes">❌ {t('Xatolar')}: {mistakes}</Link>}
         </div>
       </section>
-
       {tips.length > 0 && (
         <section className="panel">
           <h3>🧭 {t('Siz uchun tavsiyalar')}</h3>
@@ -104,35 +157,6 @@ export default function Home() {
           </div>
         </section>
       )}
-
-      {examDay && (
-        <section className="notice">
-          <b>🗓 {t('Imtihon kuni rejimi')}</b>
-          <p>{daysLeft === 0 ? 'Imtihon bugun!' : 'Imtihon ertaga!'} Faqat xatolaringizni takrorlang va dam oling.</p>
-          <Link className="btn" to="/quiz/mistakes">{t('Xatolar ustida ishlash')} ({mistakes})</Link>
-        </section>
-      )}
-
-      <Link to="/quiz/exam" className="cta">
-        <span className="cta-icon">🎓</span>
-        <span><b>{t('Imtihon simulyatori')}</b><br /><small>{s.exam.questionCount} {t('savol')} · {s.exam.minutes} {t('daqiqa')} · {s.exam.maxErrors} {t('xato')}</small></span>
-        <span>→</span>
-      </Link>
-
-      <div className="grid">
-        <Card to="/tests#tickets" icon="🎫" title={t('Biletlar')} />
-        <Card to="/tests#topics" icon="📚" title={t('Mavzular')} />
-        <Card to="/quiz/review" icon="🧠" title={t('Aqlli takrorlash')} badge={due || undefined} />
-        <Card to="/quiz/mistakes" icon="❌" title={t('Xatolar ustida ishlash')} badge={mistakes || undefined} />
-        <Card to="/quiz/favorites" icon="★" title={t('Saralanganlar')} badge={s.favorites.length || undefined} />
-        <Card to="/quiz/marathon" icon="🏃" title={t('Marafon')} subtitle={s.marathon.index ? `${s.marathon.index + 1}-savoldan davom` : undefined} />
-        <Card to="/guide/signs" icon="⚠️" title={t("Yo'l belgilari")} />
-        <Card to="/guide" icon="📖" title={t("Yo'riqnoma")} />
-        <Card to="/chat" icon="💬" title={t('Yordamchi')} subtitle={t('Savolingizga javob')} badge={unread || undefined} />
-        <Card to="/submit" icon="✍️" title={t('Savol yuborish')} subtitle={t("O'z savolingizni qo'shing")} />
-        <Card to="/rating" icon="🏅" title={t('Reyting')} subtitle={`${earned}/${ACHIEVEMENTS.length} ${t('yutuq')}`} />
-        <Card to="/school" icon={session?.user.role === 'teacher' ? '👨‍🏫' : '👥'} title={t('Avtomaktab')} subtitle={session?.user.role === 'teacher' ? t("Guruhlarim") : t("Guruhga qo'shilish")} />
-      </div>
 
       {daysLeft !== null && daysLeft > 1 && (
         <section className="panel">
