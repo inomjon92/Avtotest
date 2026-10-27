@@ -227,7 +227,7 @@ h4 { margin: 8px 0 4px; }
 .gallery-grid.wide { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .gallery-grid figure { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px; font-size: .8rem; }
 .gallery-grid figure .road-sign { display: block; margin: 0 auto; }
-.app.admin-app { max-width: 1100px; padding-bottom: 24px; }
+.app.admin-app { max-width: 1320px; padding-bottom: 24px; }
 
 /* Tavsiyalar */
 .advice { display: grid; gap: 8px; }
@@ -293,3 +293,42 @@ label.check { display: flex; align-items: center; gap: 8px; margin: 8px 0; curso
 .sign-compare figure { margin: 0; text-align: center; }
 .sign-compare img, .sign-empty { width: 90px; height: 90px; object-fit: contain; border-radius: 8px; background: var(--surface-2, rgba(127,127,127,.08)); }
 .sign-empty { display: grid; place-items: center; font-size: 2rem; color: var(--muted); }
+
+/* ---- Admin panel: yon menyu (kompyuter) / chiquvchi menyu (telefon) ---- */
+.admin-shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 24px; align-items: start; }
+.admin-nav { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px 10px; box-shadow: var(--shadow); margin-top: 12px; }
+.admin-brand { display: flex; align-items: baseline; gap: 6px; padding: 4px 10px 12px; font-size: 1.05rem; }
+.admin-nav-group + .admin-nav-group { margin-top: 10px; }
+.admin-nav-title { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 10px 4px; font-weight: 600; }
+.admin-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; background: none; border-radius: 10px; cursor: pointer; text-align: left; font-size: .93rem; }
+.admin-nav-item:hover { background: var(--surface-2); }
+.admin-nav-item.active { background: var(--primary); color: var(--primary-text); }
+.admin-nav-item.active .badge { background: #fff; color: var(--primary); }
+.admin-nav-item.logout { margin-top: 12px; color: var(--muted); border-top: 1px solid var(--border); border-radius: 0 0 10px 10px; padding-top: 12px; }
+.admin-nav-icon { width: 22px; text-align: center; flex: none; }
+.admin-main { min-width: 0; }
+.admin-top { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: calc(14px + env(safe-area-inset-top)) 0 12px; }
+.admin-top h1 { font-size: 1.3rem; margin: 0; flex: 1; }
+.admin-burger { display: none; }
+.admin-backdrop { display: none; }
+@media (max-width: 860px) {
+  .admin-shell { display: block; }
+  .admin-burger { display: inline-grid; }
+  .admin-top h1 { font-size: 1.1rem; }
+  .admin-nav { position: fixed; top: 0; bottom: 0; left: 0; width: min(280px, 82vw); max-height: none; margin: 0; border-radius: 0 16px 16px 0; z-index: 50; transform: translateX(-105%); transition: transform .2s ease; padding-top: calc(12px + env(safe-area-inset-top)); }
+  .menu-open .admin-nav { transform: none; }
+  .admin-backdrop { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, .35); z-index: 40; }
+  .admin-main .row-wrap > .search.grow { flex-basis: 100%; }
+}
+
+.pill { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; margin-left: 6px; background: var(--surface-2); color: var(--muted); vertical-align: middle; }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.good { background: var(--good-bg); color: var(--good); }
+.access-box { border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; display: grid; gap: 10px; background: var(--surface-2); }
+.access-box.warn { border-color: var(--warn); background: var(--warn-bg); }
+.access-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.access-head .pill { margin: 0; }
+.access-box > .btn { justify-self: start; }
+.access-pw { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.access-pw label { min-width: 180px; }

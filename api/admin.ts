@@ -1,5 +1,5 @@
 // Administrator: foydalanuvchilar, kirishlar tarixi, umumiy statistika, xato xabarlari.
-import { db, handler, HttpError, q, requireAdmin, summarize, type Stat } from './_lib.js';
+import { db, handler, hashPassword, HttpError, q, requireAdmin, summarize, type Stat } from './_lib.js';
 import { cleanQuestion } from './community.js';
 
 export default handler(async (req) => {
@@ -12,9 +12,13 @@ export default handler(async (req) => {
       select u.id, u.login, u.name, u.role, u.blocked, u.created_at, u.last_seen, u.login_count, u.last_ip, u.last_agent, p.state, p.updated_at as synced_at
       from users u left join progress p on p.user_id = u.id
       order by u.last_seen desc nulls last`;
+    // Noto'g'ri parol tufayli hozir vaqtincha qulflangan loginlar
+    const fails = await s<{ key: string; n: number }[]>`select key, count(*)::int as n from auth_failures
+      where (key like 'acct:%' or key like 'login:%') and at > now() - interval '15 minutes' group by key`;
+    const locked = new Set(fails.filter((f) => f.n >= (f.key.startsWith('acct:') ? 20 : 5)).map((f) => f.key.split(':').pop()));
     return {
       users: rows.map((r: any) => ({
-        id: r.id, login: r.login, name: r.name, role: r.role, blocked: r.blocked,
+        id: r.id, login: r.login, name: r.name, role: r.role, blocked: r.blocked, locked: locked.has(r.login),
         createdAt: r.created_at, lastSeen: r.last_seen, loginCount: r.login_count, syncedAt: r.synced_at, ip: r.last_ip, agent: r.last_agent,
         ...summarize(r.state),
       })),
@@ -76,8 +80,13 @@ export default handler(async (req) => {
     const [row] = await s`select u.id, u.login, u.name, u.role, u.blocked, u.created_at, u.last_seen, u.login_count, u.last_ip, u.last_agent, p.state from users u left join progress p on p.user_id = u.id where u.id = ${id}`;
     if (!row) throw new HttpError(404, 'Topilmadi');
     const logins = await s`select at, kind, agent, ip from logins where user_id = ${id} order by at desc limit 50`;
+    // Oxirgi 15 daqiqadagi noto'g'ri parol urinishlari (5 tasi bitta IP dan yoki 20 tasi jami bo'lsa hisob vaqtincha qulflanadi)
+    const fails = await s<{ key: string; n: number }[]>`select key, count(*)::int as n from auth_failures
+      where (key = ${'acct:' + row.login} or key like ${'login:%:' + row.login}) and at > now() - interval '15 minutes' group by key`;
+    const failed = fails.find((f) => f.key.startsWith('acct:'))?.n ?? 0;
+    const locked = failed >= 20 || fails.some((f) => f.key.startsWith('login:') && f.n >= 5);
     const st = row.state ?? {};
-    return { user: { id: row.id, login: row.login, name: row.name, role: row.role, blocked: row.blocked, createdAt: row.created_at, lastSeen: row.last_seen, loginCount: row.login_count, ip: row.last_ip, agent: row.last_agent, ...summarize(st) },
+    return { user: { id: row.id, login: row.login, name: row.name, role: row.role, blocked: row.blocked, failed, locked, createdAt: row.created_at, lastSeen: row.last_seen, loginCount: row.login_count, ip: row.last_ip, agent: row.last_agent, ...summarize(st) },
       attempts: (st.attempts ?? []).slice(-30).reverse().map((a: any) => ({ title: a.title, mode: a.mode, correct: a.correct, total: a.total, passed: a.passed, finishedAt: a.finishedAt })),
       rulesRead: st.rulesRead ?? {}, logins };
   }
@@ -89,6 +98,27 @@ export default handler(async (req) => {
       if (!['student', 'teacher'].includes(role)) throw new HttpError(400, "Noto'g'ri rol");
       await s`update users set role = ${role} where id = ${id}`;
     }
+    return { ok: true };
+  }
+
+  // Foydalanuvchi og'zaki murojaat qilganda: noto'g'ri urinishlar qulfini ochish
+  if (req.method === 'POST' && action === 'unlock-user') {
+    const [u] = await s<{ login: string }[]>`select login from users where id = ${Number(req.body?.id) || 0}`;
+    if (!u) throw new HttpError(404, 'Topilmadi');
+    await s`delete from auth_failures where key = ${'acct:' + u.login} or key like ${'login:%:' + u.login} or key = ${'pw:' + req.body.id}`;
+    await s`update users set blocked = false where id = ${req.body.id}`;
+    return { ok: true };
+  }
+
+  // Admin yangi parol o'rnatadi; foydalanuvchining barcha qurilmalardagi eski kirishlari bekor bo'ladi
+  if (req.method === 'POST' && action === 'set-password') {
+    const id = Number(req.body?.id) || 0;
+    const pw = String(req.body?.password ?? '');
+    if (pw.length < 5) throw new HttpError(400, "Parol kamida 5 belgidan iborat bo'lishi kerak");
+    if (pw.length > 128) throw new HttpError(400, 'Parol juda uzun');
+    const [u] = await s<{ login: string }[]>`update users set pass_hash = ${hashPassword(pw)}, token_ver = token_ver + 1 where id = ${id} returning login`;
+    if (!u) throw new HttpError(404, 'Topilmadi');
+    await s`delete from auth_failures where key = ${'acct:' + u.login} or key like ${'login:%:' + u.login}`;
     return { ok: true };
   }
 

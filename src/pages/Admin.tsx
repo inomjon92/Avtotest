@@ -20,11 +20,15 @@ const NO_VERSIONS: Question[] = [];
 const STATUS_LABEL: Record<QuestionStatus, string> = { draft: 'Qoralama', review: 'Tekshiruvda', published: 'Nashr qilingan', archived: 'Arxiv' };
 type Tab = 'overview' | 'users' | 'activity' | 'logins' | 'questions' | 'submissions' | 'reports' | 'chatbot' | 'gallery' | 'import' | 'stats' | 'exam' | 'security';
 
-const TABS: [Tab, string][] = [
-  ['overview', 'Umumiy'], ['users', 'Foydalanuvchilar'], ['activity', 'Eng faollar'], ['logins', 'Kirishlar tarixi'], ['questions', 'Savollar'],
-  ['submissions', 'Yuborilgan savollar'], ['reports', 'Xato xabarlari'], ['chatbot', 'Chat-bot'], ['gallery', 'Rasmlar'],
-  ['import', 'Import / eksport'], ['stats', 'Savol statistikasi'], ['exam', 'Imtihon formati'], ['security', 'Admin kirishlari'],
+// Menyu guruhlari: [bo'lim, belgi, nom]
+const NAV: { group: string; items: [Tab, string, string][] }[] = [
+  { group: '', items: [['overview', '📊', 'Umumiy']] },
+  { group: 'Foydalanuvchilar', items: [['users', '👥', 'Foydalanuvchilar'], ['activity', '🔥', 'Eng faollar'], ['logins', '🕑', 'Kirishlar tarixi']] },
+  { group: 'Kontent', items: [['questions', '📝', 'Savollar'], ['submissions', '📥', 'Yuborilgan savollar'], ['reports', '⚠️', 'Xato xabarlari'], ['chatbot', '💬', 'Chat-bot'], ['gallery', '🖼', 'Rasmlar'], ['import', '📦', 'Import / eksport'], ['stats', '📈', 'Savol statistikasi']] },
+  { group: 'Sozlamalar', items: [['exam', '⏱', 'Imtihon formati'], ['security', '🔐', 'Admin kirishlari']] },
 ];
+const TABS = NAV.flatMap((g) => g.items);
+const isTab = (v: string): v is Tab => TABS.some(([id]) => id === v);
 const KIND_LABEL: Record<string, string> = { register: "Ro'yxatdan o'tdi", login: 'Kirdi (parol bilan)', open: 'Ilovani ochdi' };
 
 const fmtDate = (v?: string | number | null) => (v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -89,7 +93,10 @@ function AdminLoginForm() {
 
 export default function Admin() {
   const token = useSyncExternalStore(subscribeAdmin, getAdminToken, getAdminToken);
-  const [tab, setTab] = useState<Tab>('overview');
+  // Ochiq bo'lim manzilda saqlanadi (/admin#users), sahifa yangilansa ham o'sha bo'lim qoladi
+  const [tab, setTabState] = useState<Tab>(() => { const h = location.hash.slice(1); return isTab(h) ? h : 'overview'; });
+  const [menu, setMenu] = useState(false);
+  const setTab = useCallback((t: Tab) => { setTabState(t); setMenu(false); history.replaceState(null, '', '#' + t); window.scrollTo(0, 0); }, []);
   const [counts, setCounts] = useState<Overview['counts'] | null>(null);
   // Yangi xabarlar sonini (belgilar) har daqiqada yangilab turamiz
   const refreshCounts = useCallback(() => { if (getAdminToken()) api<Overview>('/admin?action=overview', { admin: true }).then((r) => setCounts(r.counts)).catch(() => {}); }, []);
@@ -104,16 +111,32 @@ export default function Admin() {
   if (!token) return <AdminLoginForm />;
   const badge: Partial<Record<Tab, number>> = { reports: counts?.reports_new, submissions: counts?.submissions_pending, chatbot: counts?.messages_new };
 
+  const current = TABS.find(([id]) => id === tab)!;
+
   return (
-    <div className="page wide">
-      <PageHeader title="Admin panel" back={false} right={<button className="btn ghost small" onClick={() => setAdminToken(null)}>Chiqish</button>} />
-      <div className="chips">
-        {TABS.map(([id, l]) => (
-          <button key={id} className={'chip ' + (tab === id ? 'active' : '')} onClick={() => setTab(id)}>
-            {l}{!!badge[id] && <span className="badge tab-badge">{badge[id]}</span>}
-          </button>
+    <div className={'admin-shell' + (menu ? ' menu-open' : '')}>
+      <aside className="admin-nav" aria-label="Admin menyusi">
+        <div className="admin-brand"><span>🚗</span><b>Avtotest</b><span className="muted tiny">admin</span></div>
+        {NAV.map((g) => (
+          <div key={g.group} className="admin-nav-group">
+            {g.group && <div className="admin-nav-title">{g.group}</div>}
+            {g.items.map(([id, icon, l]) => (
+              <button key={id} className={'admin-nav-item' + (tab === id ? ' active' : '')} onClick={() => setTab(id)}>
+                <span className="admin-nav-icon" aria-hidden>{icon}</span><span className="grow">{l}</span>
+                {!!badge[id] && <span className="badge">{badge[id]}</span>}
+              </button>
+            ))}
+          </div>
         ))}
-      </div>
+        <button className="admin-nav-item logout" onClick={() => setAdminToken(null)}><span className="admin-nav-icon" aria-hidden>⎋</span>Chiqish</button>
+      </aside>
+      {menu && <div className="admin-backdrop" onClick={() => setMenu(false)} />}
+      <main className="admin-main">
+        <header className="admin-top">
+          <button className="icon-btn admin-burger" onClick={() => setMenu(true)} aria-label="Menyu">☰</button>
+          <h1><span aria-hidden>{current[1]}</span> {current[2]}</h1>
+          {Object.values(badge).some(Boolean) && <span className="badge admin-burger" title="Yangi xabarlar">{Object.values(badge).reduce((a, b) => (a ?? 0) + (b ?? 0), 0)}</span>}
+        </header>
       {tab === 'overview' && <OverviewTab go={setTab} />}
       {tab === 'users' && <UsersTab />}
       {tab === 'activity' && <ActivityTab />}
@@ -127,6 +150,7 @@ export default function Admin() {
       {tab === 'stats' && <StatsTab />}
       {tab === 'exam' && <ExamTab />}
       {tab === 'security' && <SecurityTab />}
+      </main>
     </div>
   );
 }
@@ -165,18 +189,21 @@ function OverviewTab({ go }: { go: (t: Tab) => void }) {
 // ---------- Foydalanuvchilar ----------
 
 interface AdminUser {
-  id: number; login: string; name: string; role: string; blocked: boolean; createdAt: string; lastSeen: string | null; loginCount: number; ip: string; agent: string;
+  id: number; login: string; name: string; role: string; blocked: boolean; locked?: boolean; failed?: number; createdAt: string; lastSeen: string | null; loginCount: number; ip: string; agent: string;
   answers: number; accuracy: number; mastered: number; seen: number; exams: number; examsPassed: number; rulesRead: number; examDate: string | null;
 }
 
 function UsersTab() {
   const { data, error, reload } = useApi<{ users: AdminUser[] }>('/admin?action=users');
   const [q, setQ] = useState('');
+  const [only, setOnly] = useState<'' | 'problem' | 'teacher'>('');
   const [open, setOpen] = useState<number | null>(null);
   const total = useStore((s) => allQuestions(s).filter((x) => x.status === 'published').length);
   if (error) return <p className="bad-text">{error}</p>;
   if (!data) return <p className="muted">Yuklanmoqda…</p>;
-  const list = data.users.filter((u) => !q || (u.login + ' ' + u.name).toLowerCase().includes(q.toLowerCase()));
+  const problems = data.users.filter((u) => u.blocked || u.locked).length;
+  const list = data.users.filter((u) => (!q || (u.login + ' ' + u.name).toLowerCase().includes(q.toLowerCase()))
+    && (only !== 'problem' || u.blocked || u.locked) && (only !== 'teacher' || u.role === 'teacher'));
   return (
     <>
       <div className="row-wrap">
@@ -184,13 +211,18 @@ function UsersTab() {
         <button className="btn ghost" onClick={reload}>↻ Yangilash</button>
         <button className="btn ghost" onClick={() => download('foydalanuvchilar.csv', '﻿' + usersCsv(data.users), 'text/csv')}>⬇ CSV</button>
       </div>
-      <p className="muted small">{list.length} ta foydalanuvchi · oxirgi faollik bo'yicha tartiblangan</p>
+      <div className="chips">
+        <button className={'chip ' + (only === '' ? 'active' : '')} onClick={() => setOnly('')}>Barchasi</button>
+        <button className={'chip ' + (only === 'problem' ? 'active' : '')} onClick={() => setOnly('problem')}>🔒 Bloklangan / qulflangan{problems > 0 && <span className="badge tab-badge">{problems}</span>}</button>
+        <button className={'chip ' + (only === 'teacher' ? 'active' : '')} onClick={() => setOnly('teacher')}>👨‍🏫 O'qituvchilar</button>
+      </div>
+      <p className="muted small">{list.length} ta foydalanuvchi · oxirgi faollik bo'yicha tartiblangan. Ustiga bosib qulfni ochish yoki parolni almashtirish mumkin.</p>
       <table className="table">
         <thead><tr><th>Foydalanuvchi</th><th>Oxirgi kirish</th><th>IP / qurilma</th><th>Kirishlar</th><th>Progress</th><th>Imtihon</th></tr></thead>
         <tbody>
           {list.map((u) => (
             <tr key={u.id} className="clickable" onClick={() => setOpen(u.id)}>
-              <td><b>{u.name || '—'}</b>{u.blocked && <span className="status"> bloklangan</span>}{u.role === 'teacher' && <span className="status"> 👨‍🏫 o'qituvchi</span>}<br /><span className="muted small">@{u.login}</span></td>
+              <td><b>{u.name || '—'}</b>{u.blocked && <span className="pill bad">bloklangan</span>}{u.locked && <span className="pill warn">🔒 qulflangan</span>}{u.role === 'teacher' && <span className="status"> 👨‍🏫 o'qituvchi</span>}<br /><span className="muted small">@{u.login}</span></td>
               <td className="nowrap">{ago(u.lastSeen)}<br /><span className="muted small">{fmtDate(u.lastSeen)}</span></td>
               <td><span className="mono small">{u.ip || '—'}</span><br /><span className="muted small">{device(u.agent)}</span></td>
               <td>{u.loginCount}</td>
@@ -236,6 +268,7 @@ function UserModal({ id, onClose, onChanged }: { id: number; onClose: () => void
             <div className="tile"><span>Javoblar / aniqlik</span><b>{data.user.answers} · {data.user.accuracy}%</b></div>
             <div className="tile"><span>O'qilgan bo'limlar</span><b>{data.user.rulesRead} / {RULES.length}</b></div>
           </div>
+          <AccountAccess user={data.user} onDone={() => { reload(); onChanged(); }} />
           {data.user.role === 'teacher' && <p className="small">👨‍🏫 <b>O'qituvchi</b> — avtomaktab kabinetida guruh ochib, o'quvchilar natijalarini ko'radi.</p>}
           <p className="small">Oxirgi IP: <span className="mono">{data.user.ip || '—'}</span> · Qurilma: <b>{device(data.user.agent)}</b> · Kirishlar soni: {data.user.loginCount}</p>
           {data.user.examDate && <p className="small">Imtihon sanasi: <b>{data.user.examDate}</b></p>}
@@ -262,7 +295,7 @@ function UserModal({ id, onClose, onChanged }: { id: number; onClose: () => void
           </ul>
 
           <div className="row-wrap">
-            <button className="btn ghost small" onClick={() => act('update-user', { blocked: !data.user.blocked }, data.user.blocked ? undefined : 'Foydalanuvchi bloklansinmi? U ilovaga kira olmaydi.')}>{data.user.blocked ? 'Blokdan chiqarish' : 'Bloklash'}</button>
+            {!data.user.blocked && <button className="btn ghost small" onClick={() => act('update-user', { blocked: true }, 'Foydalanuvchi bloklansinmi? U ilovaga kira olmaydi.')}>⛔ Bloklash</button>}
             <button className="btn ghost small" onClick={() => act('update-user', { role: data.user.role === 'teacher' ? 'student' : 'teacher' }, data.user.role === 'teacher' ? "O'qituvchi huquqi olib tashlansinmi?" : "Foydalanuvchiga o'qituvchi (avtomaktab) huquqi berilsinmi? U guruh ochib, o'quvchilar natijalarini ko'ra oladi.")}>{data.user.role === 'teacher' ? "👨‍🏫 O'qituvchilikdan olish" : "👨‍🏫 O'qituvchi qilish"}</button>
             <button className="btn danger small" onClick={() => act('delete-user', {}, "Foydalanuvchi va uning barcha natijalari o'chiriladi. Davom etasizmi?")}>O'chirish</button>
           </div>
@@ -271,6 +304,48 @@ function UserModal({ id, onClose, onChanged }: { id: number; onClose: () => void
     </Modal>
   );
 }
+
+/** Hisobga kirish: blok/qulfni ochish va admin tomonidan yangi parol o'rnatish (foydalanuvchi og'zaki murojaat qilganda) */
+function AccountAccess({ user, onDone }: { user: AdminUser; onDone: () => void }) {
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const run = async (action: string, body: object, ok: string) => {
+    setBusy(true); setMsg(null);
+    try { await api(`/admin?action=${action}`, { body: { id: user.id, ...body }, admin: true }); setMsg({ ok: true, text: ok }); onDone(); }
+    catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'Xatolik' }); }
+    finally { setBusy(false); }
+  };
+  const gen = () => setPw(String(randomInt(100000, 999999)));
+  const problem = user.blocked || user.locked;
+  return (
+    <section className={'access-box' + (problem ? ' warn' : '')}>
+      <div className="access-head">
+        <b>🔐 Hisobga kirish</b>
+        {user.blocked ? <span className="pill bad">⛔ admin bloklagan</span>
+          : user.locked ? <span className="pill warn">🔒 noto'g'ri parol tufayli qulflangan</span>
+          : <span className="pill good">✓ faol</span>}
+      </div>
+      {!!user.failed && !user.locked && <p className="tiny muted">Oxirgi 15 daqiqada {user.failed} ta noto'g'ri urinish.</p>}
+      {problem && (
+        <button className="btn small" disabled={busy} onClick={() => run('unlock-user', {}, "Hisob ochildi. Foydalanuvchi hozir kira oladi.")}>🔓 Blokdan ochish</button>
+      )}
+      <form className="access-pw" onSubmit={(e) => {
+        e.preventDefault();
+        if (pw.length < 5) return setMsg({ ok: false, text: "Parol kamida 5 belgi bo'lsin" });
+        if (!confirm(`@${user.login} uchun yangi parol: ${pw}\nUning boshqa qurilmalardagi kirishlari bekor bo'ladi. Davom etasizmi?`)) return;
+        run('set-password', { password: pw }, `Yangi parol o'rnatildi: ${pw} — uni foydalanuvchiga ayting. Kirgach, sozlamalardan o'zi almashtirishi mumkin.`).then(() => setPw(''));
+      }}>
+        <label className="grow">Yangi parol<PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" placeholder="kamida 5 belgi" /></label>
+        <button type="button" className="btn ghost small" onClick={gen}>🎲 Tasodifiy</button>
+        <button className="btn small" disabled={busy || !pw}>🔑 Parolni almashtirish</button>
+      </form>
+      {msg && <p className={'small ' + (msg.ok ? 'good-text' : 'bad-text')}>{msg.text}</p>}
+    </section>
+  );
+}
+
+const randomInt = (min: number, max: number) => min + (crypto.getRandomValues(new Uint32Array(1))[0] % (max - min + 1));
 
 // ---------- Kirishlar ----------
 

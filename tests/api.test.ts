@@ -266,6 +266,23 @@ describe.skipIf(!enabled)('server API', () => {
     expect((await call('/content')).data.signs['1.1']).toBe(png);
   });
 
+  it("admin qulflangan hisobni ochadi va yangi parol o'rnatadi", async () => {
+    const r = await call('/auth?action=register', { body: { login: 'qulf' + suffix, password: 'secret12', name: 'Qulf' } });
+    for (let i = 0; i < 5; i++) await call('/auth?action=login', { body: { login: 'qulf' + suffix, password: 'xato' + i }, ip: '10.70.0.1' });
+    expect((await call('/auth?action=login', { body: { login: 'qulf' + suffix, password: 'secret12' }, ip: '10.70.0.1' })).status).toBe(429);
+    const id = r.data.user.id;
+    expect((await call('/admin?action=user&id=' + id, { token: adminToken })).data.user.locked).toBe(true);
+    expect((await call('/admin?action=users', { token: adminToken })).data.users.find((u: any) => u.id === id).locked).toBe(true);
+    expect((await call('/admin?action=unlock-user', { body: { id }, token: userToken })).status).toBe(401);
+    expect((await call('/admin?action=unlock-user', { body: { id }, token: adminToken })).status).toBe(200);
+    expect((await call('/auth?action=login', { body: { login: 'qulf' + suffix, password: 'secret12' }, ip: '10.70.0.1' })).status).toBe(200);
+    expect((await call('/admin?action=set-password', { body: { id, password: '123' }, token: adminToken })).status).toBe(400);
+    expect((await call('/admin?action=set-password', { body: { id, password: '654321' }, token: adminToken })).status).toBe(200);
+    expect((await call('/auth?action=me', { token: r.data.token })).status).toBe(401);
+    expect((await call('/auth?action=login', { body: { login: 'qulf' + suffix, password: 'secret12' } })).status).toBe(401);
+    expect((await call('/auth?action=login', { body: { login: 'qulf' + suffix, password: '654321' } })).status).toBe(200);
+  });
+
   it('bloklangan foydalanuvchi kira olmaydi', async () => {
     const users = (await call('/admin?action=users', { token: adminToken })).data.users;
     const ali = users.find((u: any) => u.login === 'ali' + suffix);
